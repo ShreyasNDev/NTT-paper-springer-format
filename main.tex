@@ -276,11 +276,7 @@ Let $a_0, a_1, \dots, a_{k-1} \in \mathbb{Z}[x]/(x^n+1)$ with $\|a_i\|_\infty \l
 \end{proposition}
 
 \begin{proof}
-For any $a, b \in \mathbb{Z}[x]/(x^n+1)$, the $j$-th coefficient of $a \cdot b$ is
-$$(a \cdot b)_j = \sum_{i=0}^{n-1} \pm\, a_i \, b_{(j-i) \bmod n},$$
-a signed sum of at most $n$ terms. Taking absolute values and applying the triangle inequality gives the single-step bound
-$$\|a \cdot b\|_\infty \leq n\,\|a\|_\infty\,\|b\|_\infty.$$
-Applying this bound to $p = a_0 \cdot a_1 \cdots a_{k-1}$ one multiplication at a time, and using $\|a_i\|_\infty \leq B$ for each factor, each step introduces one factor of $n$ and one factor of $B$. After $k-1$ multiplications we obtain
+In the worst case, each coefficient of $p = a_0 \cdot a_1 \cdots a_{k-1}$ is a sum of $n^{k-1}$ terms, each of which is a product of one coefficient from each $a_i$. Since every coefficient satisfies $|a_{i,j}| \leq B$, each such product is at most $B^k$ in absolute value. Summing over all $n^{k-1}$ terms gives
 $$\|p\|_\infty \leq n^{k-1} B^k. \qed$$
 \end{proof}
 
