@@ -276,9 +276,12 @@ Let $a_0, a_1, \dots, a_{k-1} \in \mathbb{Z}[x]/(x^n+1)$ with $\|a_i\|_\infty \l
 \end{proposition}
 
 \begin{proof}
-For any $a, b \in \mathbb{Z}[x]/(x^n+1)$, the $j$-th coefficient of $a \cdot b$ is a signed sum of at most $n$ terms of the form $a_i\,b_{(j-i)\bmod n}$, so
+For any $a, b \in \mathbb{Z}[x]/(x^n+1)$, the $j$-th coefficient of $a \cdot b$ is
+$$(a \cdot b)_j = \sum_{i=0}^{n-1} \pm\, a_i \, b_{(j-i) \bmod n},$$
+a signed sum of at most $n$ terms. Taking absolute values and applying the triangle inequality gives the single-step bound
 $$\|a \cdot b\|_\infty \leq n\,\|a\|_\infty\,\|b\|_\infty.$$
-Applying this bound $k-1$ times to $p = a_0 \cdot a_1 \cdots a_{k-1}$, with each $\|a_i\|_\infty \leq B$, gives $\|p\|_\infty \leq n^{k-1}B^k$.
+Applying this bound to $p = a_0 \cdot a_1 \cdots a_{k-1}$ one multiplication at a time, and using $\|a_i\|_\infty \leq B$ for each factor, each step introduces one factor of $n$ and one factor of $B$. After $k-1$ multiplications we obtain
+$$\|p\|_\infty \leq n^{k-1} B^k. \qed$$
 \end{proof}
 
 CRT reconstructions are already used often in integer and polynomial multiplication, so this algorithm is highly efficient in their calculation. The exact algorithm is as follows
