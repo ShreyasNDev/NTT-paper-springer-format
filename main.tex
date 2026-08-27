@@ -40,14 +40,25 @@ The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation~\
 
 We observe that this standard approach is wasteful when all polynomials reside in the same fixed-size quotient ring, as is the case in the cryptographic settings described above. Each intermediate result is transformed back to the coefficient domain via an inverse NTT, only to be immediately transformed forward again for the next multiplication. These intermediate inverse-forward pairs are redundant: since the Hadamard product of two spectral vectors is itself a valid spectral vector in the same ring, all intermediate multiplications can be performed entirely in the NTT domain, and the inverse transform can be deferred to the very end of the computation.
 
-We state the generalized convolution theorem for $k$-way products, analyze the precise transform savings, identify the exact conditions under which the optimization applies (and does not), and provide experimental validation.
 
-We emphasize that this optimization applies specifically to rings where the NTT size is fixed across all multiplications. That is, where no intermediate degree growth occurs. In contrast, for general integer or polynomial multiplication where intermediate products grow in degree, the delayed inverse provides no benefit. For this, we use CRT reconstruction to apply our method, and thus achieve efficiency across multiplication without modulus. 
+Our contributions 
+\begin{itemize}
+    \item We state the Generalized Convolution Theorem, proving its correctness and its use of $k+1$ transforms compared with the standard count of $3(k-1)$ transforms.
+    \item We state the Fixed-Ring Delayed Inverse Algorithm, making use of the Generalized Convolution Theorem, and stating its speedup factor of $\frac{3(k-1)}{k+1}$. We consider the limitations of this method to only be applicable under a coefficient modulus.
+    \item We make use of the Chinese Remainder Theorem to apply the Fixed-Ring Delayed Inverse Algorithm to the general $$\mathbb{Z}/(x^n+1)$$ ring, dubbing this the General Delayed Inverse Algorithm. We do this by performing NTTs over a modulus so large that modular reduction is not needed. 
+    \item We state and prove the minimum modulus size such that the General Delayed Inverse Algorithm may work without error.
+    \item We provide experimental validation over the Goldilocks prime $(q = 2^64 −2^32 + 1)$, confirming the theoretical transform counts exactly and demonstrating measured speedups approaching 3× for large chain lengths.
+    \item We consider one of the applications of this method, that being to Batch KZG Opening. We state that the Zero Polynomial is a product of 
+
+\end{itemize}
+
 
 \paragraph{Organization.} Section 2 reviews the Number Theoretic Transform, the convolution theorem, and the Chinese Remainder Theorem. Section 3 presents the standard pairwise and balanced product tree algorithms for chain multiplication. Section 4 presents the Delayed Inverse Algorithm, the Generalized Convolution Theorem, the Hybrid Delayed Inverse Product Tree, and the General Delayed Inverse Algorithm. Section 5 provides experimental evaluation. Section 6 discusses an application to batch KZG opening. Section 7 concludes.
 
 \section{Background}
-\subsection{Number Theoretic Transforms and CRTs}
+
+Here, we define and show the Number Theoretic Transform over $\mathbb{Z}/(x^n+1)$. We define which modulus are NTT-possible and NTT-friendly and we show how to perform Cooley-Tukey Style fast NTTs. On top of this, we state the convolution theorem, showing how NTTs are able to optimize products, and state the Chinese Remainder Theorem.
+
 \begin{definition}
 
     The Number Theoretic Transform~\cite{pollard1971fft} is a variant of the discrete Fourier transform, where the root of unity is not complex but instead an integer over a modular ring. It can be seen as an exact discrete Fourier transform due to not requiring floating-point precision. Consider a polynomial with coefficients over the ring $\mathbb{Z} / q\mathbb{Z}$. We express this polynomial $a_0+a_1x+a_2x^{2}... +a_{n-1}x^{n-1}$ in the vector form.
@@ -135,6 +146,9 @@ This is the main idea \textbf{behind} Fourier transform based multiplication. As
     $$\sum_{i=0}^{c-1} A_i(x)\, Q_i N_i \pmod{Q}$$
 \end{definition}
 \section{\textbf{Standard Chain Multiplication Algorithms}}
+
+We state 2 standard ways to evaluate product chains, both requiring $3(k-1)$ transforms. We first show Pairwise Chain Evaluation, the simplest possible way to evaluate product chains, and then state the Balanced Product Tree as a way to make use of parallel architecture.
+
 \subsection{Pairwise Chain Evaluation}
 
 Consider the k-length product chain of polynomials
@@ -198,6 +212,7 @@ For both of these algorithms, a significant overhead is spent in performing tran
 
 \section{Delayed Inverse Algorithms}
 
+We propose our Delayed Inverse Algorithms. We first state and prove the Generalized Convolution Theorem, and show how redundant transforms are eliminated. We show the new transform count of $k+1$, and show the Fixed-Ring Delayed Inverse Algorithm with the speedup factor of $\frac{3(k-1)}{k+1}$. We then show the Generalized Delayed Inverse Algorithm, with its transform count of $c(k+1)$ as opposed to $3c(k-1)$. We place a minimum bound on the modulus needed to perform the Generalized Delayed Inverse Algorithm
 \subsection{Fixed-Ring Delayed Inverse Algorithm}
 
 The main idea behind the Delayed Inverse Algorithm is to perform all operations under the spectral domain so as to eliminate redundant transforms. Assume once again that we have a k-length product chain. We start by performing Pairwise Chain Evaluation.
