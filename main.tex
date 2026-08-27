@@ -405,7 +405,7 @@ The operand size is fixed at $n = 256$. Chain lengths $k \in \{2, 3, 4, 5, 8, 10
 
 \subsubsection*{CRT Moduli and Roots of Unity}
 
-The six NTT-friendly primes used are listed in Table~\ref{tab:exp2_moduli}. All primes satisfy $512 \mid q_j - 1$, guaranteeing the existence of a primitive $2n = 512$-th root of unity for $n = 256$. The first modulus is the 64-bit Goldilocks prime; the remaining five are the largest 63-bit primes satisfying this divisibility condition. For each modulus $q_j$ with primitive root $g$, the value $\psi_j = g^{(q_j - 1)/512} \bmod q_j$ satisfies $\psi_j^{256} \equiv -1 \pmod{q_j}$, as verified at runtime.
+The six NTT-friendly primes used are listed in Table~\ref{tab:exp2_moduli}. All primes satisfy $512 \mid q_j - 1$, guaranteeing the existence of a primitive $2n = 512$-th root of unity for $n = 256$. The first modulus is the 64-bit Goldilocks prime, and the remaining five are the largest 63-bit primes satisfying this divisibility condition. For each modulus $q_j$ with primitive root $g$, the value $\psi_j = g^{(q_j - 1)/512} \bmod q_j$ satisfies $\psi_j^{256} \equiv -1 \pmod{q_j}$, as verified at runtime.
 
 \begin{table}[htbp]
 \centering
@@ -432,7 +432,7 @@ For every $(k, c)$ pair tested, the instrumented counters confirmed the theoreti
 
 \subsubsection*{Wall-Clock Time}
 
-Figure~\ref{fig:exp2_time} shows the mean wall-clock time for both algorithms as a function of chain length $k$. At $k = 2$, both algorithms use the same number of transforms ($3c(k-1) = c(k+1) = 3c$), so no speedup is expected; the measured times are within noise of each other. For $k \geq 3$, General Delayed Inverse is consistently faster, with the gap widening as $k$ increases. The absolute times are larger than in Experiment~1 because of the additional CRT reconstruction cost (Garner's algorithm~\cite{garner1959residue} over multiple moduli), but this overhead is common to both algorithms.
+Figure~\ref{fig:exp2_time} shows the mean wall-clock time for both algorithms as a function of chain length $k$. At $k = 2$, both algorithms use the same number of transforms ($3c(k-1) = c(k+1) = 3c$), so no speedup is expected, and the measured times are within noise of each other. For $k \geq 3$, General Delayed Inverse is consistently faster, with the gap widening as $k$ increases. The absolute times are larger than in Experiment~1 because of the additional CRT reconstruction cost (Garner's algorithm~\cite{garner1959residue} over multiple moduli), but this overhead is common to both algorithms.
 
 \begin{figure}[htbp]
     \centering
@@ -488,7 +488,7 @@ $$\frac{3(k-1)}{k+1} = \frac{45}{17} \approx 2.65\times.$$
 
 \subsection*{Deployment Context}
 
-Internet-scale RSA audits routinely process tens of millions of public keys. Heninger et al.~\cite{heninger2012mining} applied batch GCD to approximately 7.1 million TLS certificates and 6.2 million SSH host keys, finding that 0.2\% of TLS hosts shared a prime factor with another host. The product tree at the core of this computation multiplies RSA moduli in a hierarchical chain; the General Delayed Inverse Algorithm reduces the NTT cost at every node of the tree where the fan-in is $k \geq 3$. At $k = 16$ per node, still practical for in-memory computation on modern hardware, the optimization delivers a $2.65\times$ reduction in transform operations across the most compute-intensive phase of the audit.
+Internet-scale RSA audits routinely process tens of millions of public keys. Heninger et al.~\cite{heninger2012mining} applied batch GCD to approximately 7.1 million TLS certificates and 6.2 million SSH host keys, finding that 0.2\% of TLS hosts shared a prime factor with another host. The product tree at the core of this computation multiplies RSA moduli in a hierarchical chain. The General Delayed Inverse Algorithm reduces the NTT cost at every node of the tree where the fan-in is $k \geq 3$. At $k = 16$ per node, still practical for in-memory computation on modern hardware, the optimization delivers a $2.65\times$ reduction in transform operations across the most compute-intensive phase of the audit.
 
 \section{Conclusion}
 
