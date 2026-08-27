@@ -376,6 +376,7 @@ The Hybrid Delayed Inverse Product Tree performs comparably to the sequential De
     \label{fig:exp1_time}
 \end{figure}
 
+\FloatBarrier
 \subsubsection{Speedup Ratio}
 
 Figure~\ref{fig:exp1_speedup} plots the measured speedup ratio (mean Pairwise time divided by mean Delayed Inverse time) alongside the theoretical transform-count ratio $\frac{3(k-1)}{k+1}$. The measured speedup broadly tracks the theoretical prediction and approaches the asymptotic limit of $3\times$ as $k$ grows.
@@ -389,6 +390,7 @@ The measured ratio consistently exceeds the theoretical curve at moderate $k$. T
     \label{fig:exp1_speedup}
 \end{figure}
 
+\FloatBarrier
 \subsubsection{Timing Summary}
 
 Table~\ref{tab:exp1_times} lists the mean wall-clock times (in milliseconds) for all four algorithms across each tested chain length, along with the measured and theoretical speedup.
@@ -441,6 +443,7 @@ Figure~\ref{fig:exp2_time} shows the mean wall-clock time for both algorithms as
     \label{fig:exp2_time}
 \end{figure}
 
+\FloatBarrier
 \subsubsection*{Speedup Ratio}
 
 Figure~\ref{fig:exp2_speedup} plots the measured speedup ratio alongside the theoretical prediction $\frac{3(k-1)}{k+1}$. The measured values track the theoretical curve closely. At $k = 16$ the gap is slightly wider (2.54$\times$ measured vs.\ 2.65$\times$ theoretical); this is consistent with the CRT reconstruction overhead, which is a constant cost shared by both algorithms but not captured by the transform-count ratio.
@@ -452,6 +455,7 @@ Figure~\ref{fig:exp2_speedup} plots the measured speedup ratio alongside the the
     \label{fig:exp2_speedup}
 \end{figure}
 
+\FloatBarrier
 \subsubsection*{Timing Summary}
 
 Table~\ref{tab:exp2_times} lists the mean wall-clock times, CRT moduli counts, transform counts, and speedup ratios for all tested chain lengths.
