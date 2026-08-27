@@ -10,8 +10,12 @@
 \usepackage{float}
 \usepackage{xcolor}
 \usepackage{url}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \title{Reducing Transform Count in NTT-Based Product Chains}
+\titlerunning{Reducing Transform Count in NTT Product Chains}
 \author{Shreyas Nathani \and Dr T. Appala Naidu}
+\authorrunning{Nathani and Naidu}
 \institute{University of Hyderabad, Hyderabad, India}
 
 \begin{document}
@@ -26,11 +30,11 @@ We describe an optimization for computing the product of k polynomials in a fixe
 
 \section{Introduction}
 
-The Number Theoretic Transform (NTT)[5] provides efficient algorithms for polynomial multiplication over finite fields and rings, reducing the cost from $O(n^2)$ schoolbook multiplication to $O(n \log n)$. It is a core operation in lattice-based cryptography, where schemes such as Kyber[1] and Dilithium[2] rely on polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n + 1)$ for key generation, encryption, and signature verification.
+The Number Theoretic Transform (NTT)~\cite{pollard1971fft} provides efficient algorithms for polynomial multiplication over finite fields and rings, reducing the cost from $O(n^2)$ schoolbook multiplication to $O(n \log n)$. It is a core operation in lattice-based cryptography, where schemes such as Kyber~\cite{bos2018kyber} and Dilithium~\cite{ducas2018dilithium} rely on polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n + 1)$ for key generation, encryption, and signature verification.
 
 A single polynomial multiplication via the NTT requires two forward transforms, one pointwise (Hadamard) product, and one inverse transform. When a chain of $k$ polynomials must be multiplied, the standard approach applies this three-transform pattern to each of the $k - 1$ individual multiplications, resulting in $3(k-1)$ transforms in total.
 
-The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation[4], which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. However, their method targets arbitrary RSA moduli, requiring Spectral Modular Reduction machinery to handle intermediate coefficient growth. Our setting is fundamentally simpler: over NTT-friendly rings, no intermediate reduction is needed, and the cancellation follows directly from the invertibility of the NTT.
+The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation~\cite{saldamli2007spectral}, which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. However, their method targets arbitrary RSA moduli, requiring Spectral Modular Reduction machinery to handle intermediate coefficient growth. Our setting is fundamentally simpler: over NTT-friendly rings, no intermediate reduction is needed, and the cancellation follows directly from the invertibility of the NTT.
 
 We observe that this standard approach is wasteful when all polynomials reside in the same fixed-size quotient ring, as is the case in the cryptographic settings described above. Each intermediate result is transformed back to the coefficient domain via an inverse NTT, only to be immediately transformed forward again for the next multiplication. These intermediate inverse-forward pairs are redundant: since the Hadamard product of two spectral vectors is itself a valid spectral vector in the same ring, all intermediate multiplications can be performed entirely in the NTT domain, and the inverse transform can be deferred to the very end of the computation.
 
@@ -44,7 +48,7 @@ We emphasize that this optimization applies specifically to rings where the NTT 
 \subsection{Number Theoretic Transforms and CRTs}
 \begin{definition}
 
-    The Number Theoretic Transform[5] is a variant of the discrete Fourier transform, where the root of unity is not complex but instead an integer over a modular ring. It can be seen as an exact discrete Fourier transform due to not requiring floating-point precision. Consider a polynomial with coefficients over the ring $\mathbb{Z} / q\mathbb{Z}$. We express this polynomial $a_0+a_1x+a_2x^{2}... +a_{n-1}x^{n-1}$ in the vector form.
+    The Number Theoretic Transform~\cite{pollard1971fft} is a variant of the discrete Fourier transform, where the root of unity is not complex but instead an integer over a modular ring. It can be seen as an exact discrete Fourier transform due to not requiring floating-point precision. Consider a polynomial with coefficients over the ring $\mathbb{Z} / q\mathbb{Z}$. We express this polynomial $a_0+a_1x+a_2x^{2}... +a_{n-1}x^{n-1}$ in the vector form.
 $$A=\begin{pmatrix}
 a_0 \\
 a_1 \\
@@ -89,7 +93,7 @@ $$q=p_0^{m_0}\cdotp p_1^{m_1}\cdotp p_2^{m_2}...\cdotp p_{k}^{m_{k}} $$
     then, for the nth root of unity to exist, 2n must divide $GCD(p_{0}-1,p_1-1,...p_k-1)$
 \end{definition}
 
-Defining the NTT and NTT-friendly moduli as such allow us to create simplifications akin to the Cooley-Tukey FFT [6].
+Defining the NTT and NTT-friendly moduli as such allow us to create simplifications akin to the Cooley-Tukey FFT~\cite{cooley1965algorithm}.
 
 $$\hat{a}_j=\sum_{i=0}^{n-1}a_{i}\psi^{i}\omega^{ij}=$$
 $$\sum_{i=0}^{\frac{n}{2}-1}a_{2i}\psi^{2i}\omega^{2ij}+\sum_{i=0}^{\frac{n}{2}-1}a_{2i+1}\psi^{2i+1}\omega^{(2i+1)j}=$$
@@ -109,7 +113,7 @@ Then
 $$NTT(C)=NTT(A)\odot NTT(B)$$
 Where the operation represents the Hadamard product of 2 vectors. Then
 $$C=INTT(NTT(A)\odot NTT(B))$$
-where the INTT is the Inverse Number Theoretic Transform[7], given by
+where the INTT is the Inverse Number Theoretic Transform~\cite{gentleman1966fft}, given by
 $$a_i=\frac{1}{n}\,\psi^{-i}\sum_{j=0}^{n-1}\hat{a}_{j}\,\omega^{-ij}$$
 \end{definition}
 
@@ -122,7 +126,7 @@ This is the main idea \textbf{behind} Fourier transform based multiplication. As
     $$A(x) \equiv A_2(x) \pmod{q_2}$$
     $$\vdots$$
     $$A(x) \equiv A_{c-1}(x) \pmod{q_{c-1}}$$
-    The Chinese Remainder Theorem states that $A(x)$ has a unique solution $\pmod{Q}$, $Q = q_0 \cdotp q_1 \cdotp q_2 \dots q_{c-1}$. This is a consequence of the general Chinese Remainder Theorem~[8]. Define
+    The Chinese Remainder Theorem states that $A(x)$ has a unique solution $\pmod{Q}$, $Q = q_0 \cdotp q_1 \cdotp q_2 \dots q_{c-1}$. This is a consequence of the general Chinese Remainder Theorem~\cite{dummit2004abstract}. Define
     $$Q_i = \frac{Q}{q_i}$$
     $$N_i \equiv Q_i^{-1} \pmod{q_i}$$
     Then the unique solution $\pmod{Q}$ is given by
@@ -235,7 +239,7 @@ To perform this algorithm, you must take k forward transforms, then 1 inverse tr
 
 We observe that this Delayed Inverse strategy and the Balanced Product Tree strategy are not mutually exclusive. By creating branches in the NTT domain, we can further parallelize the evaluation. 
 
-\begin{algorithm}[H]
+\begin{algorithm}[htbp]
 \caption{Hybrid Delayed Inverse Product Tree}
 \begin{algorithmic}[1]
 \Require Polynomials $a_0, a_1, \ldots, a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
@@ -277,7 +281,7 @@ Applying this bound $k-1$ times to $p = a_0 \cdot a_1 \cdots a_{k-1}$, with each
 
 CRT reconstructions are already used often in integer and polynomial multiplication, so this algorithm is highly efficient in their calculation. The exact algorithm is as follows
 
-\begin{algorithm}[H]
+\begin{algorithm}[htbp]
 \caption{CRT-Based Delayed Inverse Multiplication}
 \begin{algorithmic}[1]
 \Require Polynomials $a_0, \dots, a_{k-1} \in \mathbb{Z}[x]/(x^n+1)$
@@ -522,7 +526,7 @@ vol.~2018, no.~1, pp.~238--268, 2018.
 V.~Buterin, D.~Feist, D.~Luo, G.~Santambrogio, M.~de~Miranda, and C.~Wahrstätter,
 ``{EIP-4844}: Shard blob transactions,''
 Ethereum Improvement Proposal, 2022.
-\url{https://eips.ethereum.org/EIPS/eip-4844}
+Available at \url{https://eips.ethereum.org/EIPS/eip-4844}
 
 \bibitem{kate2010kzg}
 A.~Kate, G.~M. Zaverucha, and I.~Goldberg,
