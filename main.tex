@@ -409,7 +409,7 @@ The operand size is fixed at $n = 256$. Chain lengths $k \in \{2, 3, 4, 5, 8, 10
 
 The six NTT-friendly primes used are listed in Table~\ref{tab:exp2_moduli}. All primes satisfy $512 \mid q_j - 1$, guaranteeing the existence of a primitive $2n = 512$-th root of unity for $n = 256$. The first modulus is the 64-bit Goldilocks prime, and the remaining five are the largest 63-bit primes satisfying this divisibility condition. For each modulus $q_j$ with primitive root $g$, the value $\psi_j = g^{(q_j - 1)/512} \bmod q_j$ satisfies $\psi_j^{256} \equiv -1 \pmod{q_j}$, as verified at runtime.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{c r c r}
@@ -428,6 +428,7 @@ $j$ & Modulus $q_j$ & Prim.\ root $g$ & $\psi_j$ \\
 \label{tab:exp2_moduli}
 \end{table}
 
+\FloatBarrier
 \subsubsection*{Transform Count Verification}
 
 For every $(k, c)$ pair tested, the instrumented counters confirmed the theoretical transform counts on every trial: General Pairwise required exactly $3c(k-1)$ transforms and General Delayed Inverse required exactly $c(k+1)$ transforms. No deviations were observed. Correctness was also verified on every trial by asserting that both algorithms produced identical coefficient vectors after CRT reconstruction via Garner's algorithm~\cite{garner1959residue}.
