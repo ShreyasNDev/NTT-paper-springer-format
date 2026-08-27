@@ -1,0 +1,27 @@
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{r r r r r r r}
+\hline
+$k$ & Pairwise & Balanced PT & Delayed Inv. & Hybrid DI PT & Speedup & Theoretical \\
+ & (ms) & (ms) & (ms) & (ms) & (meas.) & \\
+\hline
+2 & 2.8 & 2.9 & 3.0 & 2.9 & 0.94$\times$ & 1.00$\times$ \\
+3 & 5.8 & 5.6 & 3.9 & 3.8 & 1.50$\times$ & 1.50$\times$ \\
+4 & 8.5 & 8.7 & 4.8 & 4.8 & 1.76$\times$ & 1.80$\times$ \\
+5 & 16.7 & 16.5 & 8.5 & 8.8 & 1.98$\times$ & 2.00$\times$ \\
+8 & 32.7 & 33.3 & 14.2 & 14.0 & 2.31$\times$ & 2.33$\times$ \\
+10 & 38.1 & 39.1 & 16.3 & 15.8 & 2.34$\times$ & 2.45$\times$ \\
+16 & 73.4 & 74.1 & 28.6 & 27.9 & 2.57$\times$ & 2.65$\times$ \\
+20 & 94.8 & 96.9 & 36.8 & 36.4 & 2.58$\times$ & 2.71$\times$ \\
+32 & 149.5 & 152.1 & 56.3 & 55.1 & 2.65$\times$ & 2.82$\times$ \\
+50 & 217.0 & 219.9 & 79.3 & 77.6 & 2.74$\times$ & 2.88$\times$ \\
+64 & 306.5 & 308.1 & 108.7 & 109.4 & 2.82$\times$ & 2.91$\times$ \\
+100 & 474.4 & 482.4 & 169.0 & 165.5 & 2.81$\times$ & 2.94$\times$ \\
+128 & 607.7 & 614.3 & 215.5 & 206.5 & 2.82$\times$ & 2.95$\times$ \\
+256 & 1012.8 & 1014.5 & 353.3 & 339.9 & 2.87$\times$ & 2.98$\times$ \\
+\hline
+\end{tabular}
+\caption{Mean wall-clock time (ms) per algorithm and chain length $k$ ($n = 256$, 95 timed trials each). Speedup is the ratio of Pairwise to Delayed Inverse mean times.}
+\label{tab:exp1_times}
+\end{table}

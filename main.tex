@@ -1,0 +1,573 @@
+\documentclass[runningheads]{llncs}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath}   % for math environments
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tabularx}
+\usepackage{booktabs} % put this in the preamble
+\usepackage{cancel}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{url}
+\title{Reducing Transform Count in NTT-Based Product Chains}
+\author{Shreyas Nathani \and Dr T. Appala Naidu}
+\institute{University of Hyderabad, Hyderabad, India}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We describe an optimization for computing the product of k polynomials in a fixed quotient ring $Z_{q}[x]/(x^n+1)$ where \textbf{$q$} is NTT-friendly. Standard approaches require $3(k-1)$ Number Theoretic Transforms, but by performing all intermediate multiplications as Hadamard products in the spectral domain and deferring the inverse transform, we reduce this to $k+1$ transforms. We prove the correctness of this method via a generalized convolution theorem, analyze complexity, and present a CRT-based extension that applies the optimization to general polynomial multiplication where intermediate products grow in degree.
+\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Lattice-Based Cryptography \and Chinese Remainder Theorem \and Spectral Domain}
+\end{abstract}
+
+
+\section{Introduction}
+
+The Number Theoretic Transform (NTT)[5] provides efficient algorithms for polynomial multiplication over finite fields and rings, reducing the cost from $O(n^2)$ schoolbook multiplication to $O(n \log n)$. It is a core operation in lattice-based cryptography, where schemes such as Kyber[1] and Dilithium[2] rely on polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n + 1)$ for key generation, encryption, and signature verification.
+
+A single polynomial multiplication via the NTT requires two forward transforms, one pointwise (Hadamard) product, and one inverse transform. When a chain of $k$ polynomials must be multiplied, the standard approach applies this three-transform pattern to each of the $k - 1$ individual multiplications, resulting in $3(k-1)$ transforms in total.
+
+We observe that this standard approach is wasteful when all polynomials reside in the same fixed-size quotient ring, as is the case in the cryptographic settings described above. Each intermediate result is transformed back to the coefficient domain via an inverse NTT, only to be immediately transformed forward again for the next multiplication. These intermediate inverse-forward pairs are redundant: since the Hadamard product of two spectral vectors is itself a valid spectral vector in the same ring, all intermediate multiplications can be performed entirely in the NTT domain, and the inverse transform can be deferred to the very end of the computation. 
+
+The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation[4], which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. However, their method targets arbitrary RSA moduli, requiring Spectral Modular Reduction machinery to handle intermediate coefficient growth. Our setting is fundamentally simpler: over NTT-friendly rings, no intermediate reduction is needed, and the cancellation follows directly from the invertibility of the NTT.
+
+We state the generalized convolution theorem for $k$-way products, analyze the precise transform savings, identify the exact conditions under which the optimization applies (and does not), and provide experimental validation.
+
+We emphasize that this optimization applies specifically to rings where the NTT size is fixed across all multiplications. That is, where no intermediate degree growth occurs. In contrast, for general integer or polynomial multiplication where intermediate products grow in degree, the delayed inverse provides no benefit. For this, we use CRT reconstruction to apply our method, and thus achieve efficiency across multiplication without modulus. 
+
+\paragraph{Organization.} Section 2 reviews the Number Theoretic Transform, the convolution theorem, and the Chinese Remainder Theorem. Section 3 presents the standard pairwise and balanced product tree algorithms for chain multiplication. Section 4 presents the Delayed Inverse Algorithm, the Generalized Convolution Theorem, the Hybrid Delayed Inverse Product Tree, and the General Delayed Inverse Algorithm. Section 5 provides experimental evaluation. Section 6 discusses an application to batch KZG opening. Section 7 concludes.
+
+\section{Background}
+\subsection{Number Theoretic Transforms and CRTs}
+\begin{definition}
+
+    The Number Theoretic Transform[5] is a variant of the discrete Fourier transform, where the root of unity is not complex but instead an integer over a modular ring. It can be seen as an exact discrete Fourier transform due to not requiring floating-point precision. Consider a polynomial with coefficients over the ring $\mathbb{Z} / q\mathbb{Z}$. We express this polynomial $a_0+a_1x+a_2x^{2}... +a_{n-1}x^{n-1}$ in the vector form.
+$$A=\begin{pmatrix}
+a_0 \\
+a_1 \\
+\vdots \\
+a_{n-1}
+    \end{pmatrix} $$
+And its NTT as
+$$NTT(A)=\hat{A}=\begin{pmatrix}
+\hat{a}_0 \\
+\hat{a}_1 \\
+\vdots \\
+\hat{a}_{n-1}
+    \end{pmatrix}$$
+
+The NTT of this vector where each element is in $\mathbb{Z} / q\mathbb{Z}$ is found by
+$$\hat{a}_j=\sum_{i=0}^{n-1}a_{i}\,\psi^{i}\omega^{ij} \pmod{q}$$
+
+Where $\psi$ is a primitive $2n$-th root of unity in $\mathbb{Z}_q$ satisfying $\psi^{2n} \equiv 1 \pmod{q}$ and $\psi^n \equiv -1 \pmod{q}$, and $\omega = \psi^2$ is the corresponding $n$-th root of unity, so that $\psi^i\omega^{ij} = \psi^{i(2j+1)}$.
+\end{definition}
+
+
+\begin{definition}
+    We say that a certain choice of modulus is NTT-possible if some nth primitive root of unity exists over the modulus choice. If
+
+    $$\omega^n\equiv1 \pmod{q}$$
+    $$\omega^k\not\equiv 1, k<n \pmod{q}$$
+
+For this to be possible the modulus must be such that, if the modulus is decomposed to its prime factors
+$$q=p_0^{m_0}\cdotp p_1^{m_1}\cdotp p_2^{m_2}...\cdotp p_{k}^{m_{k}} $$
+
+then, for the nth root of unity to exist, n must divide $GCD(p_{0}-1,p_1-1,...p_k-1)$
+\end{definition}
+
+\begin{definition}
+    We say that a certain choice of modulus is NTT-friendly if
+    $$\psi^{2n}\equiv1 \pmod{q}$$
+    $$\psi^{n}\equiv-1 \pmod{q}$$
+    $$\psi^{k}\not\equiv1, \quad k<2n \pmod{q}$$
+
+    This ensures $\psi$ is a primitive $2n$-th root of unity, which allows for FFT-simplifications. For this to be possible the modulus must be such that, if the modulus is decomposed to its prime factors
+$$q=p_0^{m_0}\cdotp p_1^{m_1}\cdotp p_2^{m_2}...\cdotp p_{k}^{m_{k}} $$
+    then, for the nth root of unity to exist, 2n must divide $GCD(p_{0}-1,p_1-1,...p_k-1)$
+\end{definition}
+
+Defining the NTT and NTT-friendly moduli as such allow us to create simplifications akin to the Cooley-Tukey FFT [6].
+
+$$\hat{a}_j=\sum_{i=0}^{n-1}a_{i}\psi^{i}\omega^{ij}=$$
+$$\sum_{i=0}^{\frac{n}{2}-1}a_{2i}\psi^{2i}\omega^{2ij}+\sum_{i=0}^{\frac{n}{2}-1}a_{2i+1}\psi^{2i+1}\omega^{(2i+1)j}=$$
+$$\sum_{i=0}^{\frac{n}{2}-1}a_{2i}\omega^{i}\omega^{2ij}+\psi\omega^{j}\sum_{i=0}^{\frac{n}{2}-1}a_{2i+1}\omega^{i}\omega^{2ij}$$
+
+As $\psi^{n}\equiv-1$ for NTT-friendly moduli:
+
+$$\hat{a}_j=\sum_{i=0}^{\frac{n}{2}-1}a_{2i}\omega^{i(2j+1)}+\psi\omega^{j}\sum_{i=0}^{\frac{n}{2}-1}a_{2i+1}\omega^{i(2j+1)}$$
+$$\hat{a}_{j+\frac{n}{2}}=\sum_{i=0}^{\frac{n}{2}-1}a_{2i}\omega^{i(2j+1)}-\psi\omega^{j}\sum_{i=0}^{\frac{n}{2}-1}a_{2i+1}\omega^{i(2j+1)}$$
+
+However, for this to exist, we need the length of the vector to be a power of 2. Mixed-radix implementations do exist, but are usually inefficient.
+
+\begin{definition}
+The convolution theorem states that for the convolution of 2 vectors
+$$C=A*B$$
+Then
+$$NTT(C)=NTT(A)\odot NTT(B)$$
+Where the operation represents the Hadamard product of 2 vectors. Then
+$$C=INTT(NTT(A)\odot NTT(B))$$
+where the INTT is the Inverse Number Theoretic Transform[7], given by
+$$a_i=\frac{1}{n}\,\psi^{-i}\sum_{j=0}^{n-1}\hat{a}_{j}\,\omega^{-ij}$$
+\end{definition}
+
+This is the main idea \textbf{behind} Fourier transform based multiplication. As a convolution of vectors is identical to polynomial multiplication, performing Hadamard products over an NTT domain and then performing an Inverse NTT results in polynomial multiplication.
+
+\begin{definition}
+    The Coefficient Modulus Chinese Remainder Theorem is as follows. Let $q_0, q_1, q_2 \dots q_{c-1}$ all be pairwise coprime integers and $A_0(x), A_1(x), A_2(x) \dots A_{c-1}(x)$ be polynomials. Then, for the system of equations
+    $$A(x) \equiv A_0(x) \pmod{q_0}$$
+    $$A(x) \equiv A_1(x) \pmod{q_1}$$
+    $$A(x) \equiv A_2(x) \pmod{q_2}$$
+    $$\vdots$$
+    $$A(x) \equiv A_{c-1}(x) \pmod{q_{c-1}}$$
+    The Chinese Remainder Theorem states that $A(x)$ has a unique solution $\pmod{Q}$, $Q = q_0 \cdotp q_1 \cdotp q_2 \dots q_{c-1}$. This is a consequence of the general Chinese Remainder Theorem~[8]. Define
+    $$Q_i = \frac{Q}{q_i}$$
+    $$N_i \equiv Q_i^{-1} \pmod{q_i}$$
+    Then the unique solution $\pmod{Q}$ is given by
+    $$\sum_{i=0}^{c-1} A_i(x)\, Q_i N_i \pmod{Q}$$
+\end{definition}
+\section{\textbf{Standard Chain Multiplication Algorithms}}
+\subsection{Pairwise Chain Evaluation}
+
+Consider the k-length product chain of polynomials
+
+$$\prod_{i=0}^{k-1}a_i=a_0 *a_1...*a_{k-1}$$
+
+Under simple unoptimized computer architecture, this chain would be evaluated by simple pairwise operations. That is, the first pair would be evaluated, then the second, till no operations remain.
+
+$$INTT(NTT(a_0)\odot NTT(a_1))*\prod_{i=2}^{k-1}a_i=$$
+$$INTT(NTT(INTT(NTT(a_0)\odot NTT(a_1)))\odot NTT(a_2))*\prod^{k-1}_{i=3}a_i$$
+
+And so on. A k-length chain requires k-1 operations. Each operation requires 2 NTTs and 1 Inverse NTT. As the difference in cost between NTTs and Inverse NTTs are negligible, we can say that this algorithm requires $3(k-1)$ transforms.
+
+\begin{algorithm}
+\caption{Pairwise Multiplication}
+\begin{algorithmic}[1]
+\Require Polynomials $a_0, a_1, \dots, a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\Ensure $p = a_0 \cdot a_1 \cdots a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\State $p \gets a_0$
+\For{$i \gets 1$ \textbf{to} $k-1$}
+    \State $p \gets \mathrm{INTT}(\mathrm{NTT}(p) \odot \mathrm{NTT}(a_i))$
+\EndFor
+\State \Return $p$
+\end{algorithmic}
+\end{algorithm}
+
+This is the simplest possible algorithm for evaluating a product chain. 
+
+\subsection{\textbf{Balanced Product Tree}}
+
+Consider a structured multiplication chain of length $2^k$. Its balanced product tree is defined by the recursive algorithm that splits it in half until only multiplicative pairs exist.
+
+This ensures that all multiplications are carried about between operands of similar size, assuming all operands are originally of similar size.
+\begin{example}
+    For a structured multiplication chain of length 8
+    $$a_0* a_1 * a_2 * a_3 * a_4 * a_5 * a_6 * a_7$$
+    Its balanced product tree is
+    $$(a_0* a_1 * a_2 * a_3) * ( a_4 * a_5 * a_6 * a_7)=$$
+    $$((a_0 * a_1)* (a_2 * a_3))* ((a_4 * a_5)* (a_6* a_7))$$
+\end{example}
+If the first layer multiplies operands of size n, the next layer will multiply operands of size 2n, then 4n, until no further layers exist. As the amount of operations is constant, no transforms are saved. The Balanced Product Tree still has $3(k-1)$ total transforms, with $2(k-1)$ forwards and $k-1$ inverses.
+
+\begin{algorithm}
+\caption{Balanced Product Tree}
+\begin{algorithmic}[1]
+\Require Polynomials $a_0, a_1, \dots, a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\Ensure $p = a_0 \cdot a_1 \cdots a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\If{$k = 1$}
+    \State \Return $a_0$
+\EndIf
+\State Split $a_0, \dots, a_{k-1}$ into $a_0, \dots, a_{\lfloor k/2 \rfloor - 1}$ and $a_{\lfloor k/2 \rfloor}, \dots, a_{k-1}$
+\State $p_{\mathrm{L}} \gets \Call{ProductTree}{a_0, \dots, a_{\lfloor k/2 \rfloor - 1}}$
+\State $p_{\mathrm{R}} \gets \Call{ProductTree}{a_{\lfloor k/2 \rfloor}, \dots, a_{k-1}}$
+\State \Return $\mathrm{INTT}(\mathrm{NTT}(p_{\mathrm{L}}) \odot \mathrm{NTT}(p_{\mathrm{R}}))$
+\end{algorithmic}
+\end{algorithm}
+
+As each branch of the tree is independent, this algorithm is highly parallelizable. In addition, the algorithm ensures that similarly sizes operands are multiplied at every level. This is useful for relatively large moduli, but less useful for smaller moduli where modular reduction occurs often (operands are no longer similarly sized).
+
+For both of these algorithms, a significant overhead is spent in performing transforms. In this paper, we propose an algorithm that reduces the amount of transforms by performing maximum operations under the spectral domain.
+
+\section{Delayed Inverse Algorithms}
+
+\subsection{Fixed-Ring Delayed Inverse Algorithm}
+
+The main idea behind the Delayed Inverse Algorithm is to perform all operations under the spectral domain so as to eliminate redundant transforms. Assume once again that we have a k-length product chain. We start by performing Pairwise Chain Evaluation.
+
+$$\prod_{i=0}^{k-1}a_{i}=$$
+$$INTT(NTT(a_0)\odot NTT(a_1))*\prod_{i=2}^{k-1}a_i=$$
+$$INTT(NTT(INTT(NTT(a_0)\odot NTT(a_1)))\odot NTT(a_2))*\prod^{k-1}_{i=3}a_i$$
+
+We recognize that we can cancel forward and inverse NTTs.
+
+$$INTT( \cancel{NTT}(\cancel{INTT}(NTT(a_0)\odot NTT(a_1)))\odot NTT(a_2))*\prod^{k-1}_{i=3}a_i=$$
+$$INTT(NTT(a_{0})\odot NTT(a_1) \odot NTT(a_2))*\prod_{i=3}^{k-1}=$$
+
+We recognize that this process can be repeated for all vectors. Thus, the convolution of all vectors can be found simply by \textbf{the following} generalized convolution theorem\textbf{:}
+
+\begin{proposition}
+    
+    The generalized Convolution Theorem states that for a k length product chain, the result can be evaluated by performing k-1 Hadamard products over the NTT domain and then performing an inverse NTT.
+
+    $$\prod_{i=0}^{k-1}a_i=INTT(NTT(a_0)\odot NTT(a_1) \odot NTT(a_2)... \odot NTT(a_{k-1}))$$
+
+    This is possible if and only if all NTTs are carried over the same ring.
+\end{proposition}
+
+This reduces the amount of transforms by a considerable margin. As all operations have directly been transformed into Hadamard products over the spectral domain, we save all inverse transforms except the final one. 
+
+\begin{algorithm}
+\caption{Delayed Inverse NTT Multiplication}
+\begin{algorithmic}[1]
+\Require Polynomials $a_0, a_1, \dots, a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\Ensure $p = a_0 \cdot a_1 \cdots a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\State $\hat{p} \gets \mathrm{NTT}(a_0)$
+\For{$i \gets 1$ \textbf{to} $k-1$}
+    \State $\hat{p} \gets \hat{p} \odot \mathrm{NTT}(a_i)$
+\EndFor
+\State \Return $\mathrm{INTT}(\hat{p})$
+\end{algorithmic}
+\end{algorithm}
+
+To perform this algorithm, you must take k forward transforms, then 1 inverse transform at the very end. Thus, the algorithm requires $k+1$ transforms as opposed to the previous $3(k-1)$ transforms. For large k, we have eliminated nearly two thirds of transforms.
+
+We observe that this Delayed Inverse strategy and the Balanced Product Tree strategy are not mutually exclusive. By creating branches in the NTT domain, we can further parallelize the evaluation. 
+
+\begin{algorithm}[H]
+\caption{Hybrid Delayed Inverse Product Tree}
+\begin{algorithmic}[1]
+\Require Polynomials $a_0, a_1, \ldots, a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\Ensure $p = a_0 \cdot a_1 \cdots a_{k-1} \in \mathbb{Z}_q[x]/(x^n+1)$
+\For{$i \gets 0$ \textbf{to} $k-1$}
+    \State $\hat{a}_i \gets \text{NTT}(a_i)$
+\EndFor
+\State $\hat{p} \gets \Call{SpectralTree}{\hat{a}_0, \ldots, \hat{a}_{k-1}}$
+\State \Return $\text{INTT}(\hat{p})$
+\Statex
+\Function{SpectralTree}{$\hat{a}_0, \ldots, \hat{a}_{k-1}$}
+\If{$k = 1$}
+    \State \Return $\hat{a}_0$
+\EndIf
+\State $\hat{p}_{\mathrm{L}} \gets \Call{SpectralTree}{\hat{a}_0, \ldots, \hat{a}_{\lfloor k/2 \rfloor - 1}}$
+\State $\hat{p}_{\mathrm{R}} \gets \Call{SpectralTree}{\hat{a}_{\lfloor k/2 \rfloor}, \ldots, \hat{a}_{k-1}}$
+\State \Return $\hat{p}_{\mathrm{L}} \odot \hat{p}_{\mathrm{R}}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+This is identical in transform count, with k forward transforms and 1 inverse transform for $k+1$ transforms total.
+
+\subsection{General Delayed Inverse Algorithm}
+
+Assume we have $k$ polynomials over $\mathbb{Z}/(x^n+1)$. If each of these polynomials have coefficients less than some bound $B$, such that the polynomials are effectively over the ring $\mathbb{Z}_B[x]/(x^n+1)$, then we can perform CRT reconstruction of the product of these polynomials by performing delayed inverse multiplication over all moduli. If the moduli chosen are $$ \{q_0, q_1, ... q_{c-1}\}$$, then the product of all moduli must satisfy.
+
+$$\prod_{i=0}^{c-1} q_i \geq n^{k-1} \cdot B^k$$
+
+\begin{proposition}
+Let $a_0, a_1, \dots, a_{k-1} \in \mathbb{Z}[x]/(x^n+1)$ with $\|a_i\|_\infty \leq B$ for all $i$. Every coefficient of the product $p = a_0 \cdot a_1 \cdots a_{k-1}$ satisfies $|p_j| \leq n^{k-1} B^k$.
+\end{proposition}
+
+\begin{proof}
+For any $a, b \in \mathbb{Z}[x]/(x^n+1)$, the $j$-th coefficient of $a \cdot b$ is a signed sum of at most $n$ terms of the form $a_i\,b_{(j-i)\bmod n}$, so
+$$\|a \cdot b\|_\infty \leq n\,\|a\|_\infty\,\|b\|_\infty.$$
+Applying this bound $k-1$ times to $p = a_0 \cdot a_1 \cdots a_{k-1}$, with each $\|a_i\|_\infty \leq B$, gives $\|p\|_\infty \leq n^{k-1}B^k$.
+\end{proof}
+
+CRT reconstructions are already used often in integer and polynomial multiplication, so this algorithm is highly efficient in their calculation. The exact algorithm is as follows
+
+\begin{algorithm}[H]
+\caption{CRT-Based Delayed Inverse Multiplication}
+\begin{algorithmic}[1]
+\Require Polynomials $a_0, \dots, a_{k-1} \in \mathbb{Z}[x]/(x^n+1)$
+\Require NTT-friendly CRT moduli $q_1, \dots, q_c$
+\Ensure $p = a_0 \cdot a_1 \cdots a_{k-1} \in \mathbb{Z}[x]/(x^n+1)$
+\For{$j = 1$ to $c$}
+    \For{$i = 0$ to $k-1$}
+        \State $a_i^{(j)} \gets a_i \bmod q_j$
+        \State $A_i^{(j)} \gets \mathrm{NTT}_{q_j}(a_i^{(j)})$
+    \EndFor
+    \State $P^{(j)} \gets A_0^{(j)}$
+    \For{$i = 1$ to $k-1$}
+        \State $P^{(j)} \gets P^{(j)} \odot A_i^{(j)}$
+    \EndFor
+    \State $p^{(j)} \gets \mathrm{INTT}_{q_j}(P^{(j)})$
+\EndFor
+\For{$t = 0$ to $n-1$}
+    \State $p_t \gets \mathrm{CRT}\bigl(p^{(1)}_t, \dots, p^{(c)}_t;\; q_1, \dots, q_c\bigr)$
+\EndFor
+\State \Return $p = \sum_{t=0}^{n-1} p_t\, x^t$
+\end{algorithmic}
+\end{algorithm}
+
+This algorithm results in $c(k+1)$ transforms, as opposed to $3c(k-1)$ transforms if delayed inverse was not implemented.
+
+\subsection{Worked Example}
+
+\begin{example}
+We illustrate the Fixed-Ring Delayed Inverse Algorithm on a chain of $k = 8$ polynomials in $\mathbb{Z}_{3329}[x]/(x^4+1)$.  The modulus $q = 3329$ admits a primitive root $g = 3$; taking $\psi = 3^{416} \equiv 749 \pmod{3329}$ gives a primitive $2n = 8$-th root of unity satisfying $\psi^4 \equiv -1 \pmod{3329}$, and $\omega = \psi^2 = 1729$ is the corresponding primitive $n = 4$-th root of unity.
+
+The eight input polynomials and their NTTs are:
+
+
+\begin{center}
+\small
+\begin{tabular}{c l l}
+\hline
+& Polynomial & $\mathrm{NTT}(\cdot)$ \\
+\hline
+$a_0$ & $1 + x$ & $(750,\;\; 41,\;\; 2581,\;\; 3290)$ \\
+$a_1$ & $2 + x^2$ & $(1731,\;\; 1602,\;\; 1731,\;\; 1602)$ \\
+$a_2$ & $x + x^2$ & $(2478,\;\; 1640,\;\; 980,\;\; 1560)$ \\
+$a_3$ & $1 + x^3$ & $(41,\;\; 750,\;\; 3290,\;\; 2581)$ \\
+$a_4$ & $1 + 2x$ & $(1499,\;\; 81,\;\; 1832,\;\; 3250)$ \\
+$a_5$ & $x^2 + x^3$ & $(1769,\;\; 2349,\;\; 1689,\;\; 851)$ \\
+$a_6$ & $2 + x$ & $(751,\;\; 42,\;\; 2582,\;\; 3291)$ \\
+$a_7$ & $1 + x^2$ & $(1730,\;\; 1601,\;\; 1730,\;\; 1601)$ \\
+\hline
+\end{tabular}
+\end{center}
+
+
+Taking the pointwise (Hadamard) product of all eight spectral vectors:
+$$\hat{P} = \mathrm{NTT}(a_0) \odot \mathrm{NTT}(a_1) \odot \cdots \odot \mathrm{NTT}(a_7) = (1640,\;\; 244,\;\; 2084,\;\; 2914)$$
+A single INTT then recovers the product polynomial:
+$$a_0 \cdot a_1 \cdots a_7 = \mathrm{INTT}(\hat{P}) = 56 + 54x + 28x^2 + 3311x^3 \pmod{3329}$$
+The entire computation required $k + 1 = 9$ transforms ($8$ forward NTTs and $1$ inverse NTT).  A standard pairwise approach would require $3(k-1) = 21$ transforms, a factor of $\frac{21}{9} \approx 2.33\times$ more.
+\end{example}
+
+\section{Experimental Evaluation}
+
+\subsection{Setup}
+
+All experiments were conducted on a Intel(R) Core(TM) Ultra 7 155H processor with 16 GB of RAM, running Microsoft Windows 11 Home 10.0.26200. The algorithms were implemented in Python 3.13, using only standard libraries and NumPy for array operations. No external NTT libraries were used; all four algorithms share the same iterative Cooley-Tukey NTT and Gentleman-Sande INTT implementations.
+
+The modulus used is the NTT-friendly Goldilocks prime $q = 2^{64} - 2^{32} + 1$. All arithmetic is performed in the ring $\mathbb{Z}_q[x]/(x^n + 1)$, where $n$ varies by experiment. Polynomial coefficients are sampled uniformly at random from $[0, q)$.
+
+For each configuration, 100 trials were executed. The first 5 trials were discarded as warmup, and timing statistics are reported over the remaining 95. Wall-clock time was measured using Python's \texttt{time.perf\_counter}, timing only the chain multiplication call and excluding input generation. NTT and INTT calls were instrumented with global counters to verify transform counts.
+
+Correctness was verified on every trial by asserting that all four algorithms---Pairwise, Balanced Product Tree, Delayed Inverse, and Hybrid Delayed Inverse Product Tree---produce identical coefficient vectors. No mismatches were observed across all experiments.
+
+\subsection{Experiment 1: Varying Chain Length}
+
+In this experiment, we fix the operand size at $n = 256$ coefficients and vary the chain length $k$ across the values $\{2, 3, 4, 5, 8, 10, 16, 20, 32, 50, 64, 100, 128, 256\}$. All polynomials are elements of $\mathbb{Z}_q[x]/(x^{256}+1)$.
+
+\subsubsection{Transform Count Verification}
+
+For every chain length tested, the instrumented counters confirmed the theoretical transform counts exactly. Pairwise and Balanced Product Tree both required $3(k-1)$ total transforms, while the Delayed Inverse and Hybrid Delayed Inverse Product Tree both required $k+1$ total transforms. No deviations were observed across any trial.
+
+\subsubsection{Wall-Clock Time}
+
+Figure~\ref{fig:exp1_time} shows the wall-clock time for all four algorithms as a function of chain length. Pairwise and Balanced Product Tree exhibit nearly identical performance, consistent with both requiring $3(k-1)$ transforms of the same fixed size. The Delayed Inverse and Hybrid Delayed Inverse Product Tree are consistently faster, with the gap widening as $k$ increases.
+
+The Hybrid Delayed Inverse Product Tree performs comparably to the sequential Delayed Inverse in single-threaded execution, as expected. The two algorithms perform the same number of transforms and Hadamard products; the Hybrid variant offers no serial advantage, but would exhibit a shorter critical path under parallel execution ($\log_2 k + 2$ versus $k + 1$).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{image.png}
+    \caption{Wall-clock time vs.\ chain length $k$ for all four algorithms, with fixed operand size $n = 256$.}
+    \label{fig:exp1_time}
+\end{figure}
+
+\subsubsection{Speedup Ratio}
+
+Figure~\ref{fig:exp1_speedup} plots the measured speedup ratio (mean Pairwise time divided by mean Delayed Inverse time) alongside the theoretical transform-count ratio $\frac{3(k-1)}{k+1}$. The measured speedup broadly tracks the theoretical prediction and approaches the asymptotic limit of $3\times$ as $k$ grows.
+
+The measured ratio consistently exceeds the theoretical curve at moderate $k$. This is expected: the theoretical ratio $\frac{3(k-1)}{k+1}$ counts only transforms, but the Pairwise algorithm also incurs overhead from repeatedly allocating and populating intermediate coefficient vectors between each INTT and the subsequent NTT. The Delayed Inverse avoids this overhead entirely by remaining in the spectral domain. At large $k$, this constant-factor advantage is diluted and the ratio converges toward the transform-count prediction.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{image (1).png}
+    \caption{Speedup ratio (Pairwise / Delayed Inverse) vs.\ chain length $k$, compared to the theoretical transform-count ratio $\frac{3(k-1)}{k+1}$ and its asymptote $y = 3$.}
+    \label{fig:exp1_speedup}
+\end{figure}
+
+\subsubsection{Timing Summary}
+
+Table~\ref{tab:exp1_times} lists the mean wall-clock times (in milliseconds) for all four algorithms across each tested chain length, along with the measured and theoretical speedup.
+
+\input{experiment1_table.tex}
+
+\subsection{Experiment 2: General Delayed Inverse Algorithm}
+
+
+In this experiment we evaluate the General Delayed Inverse Algorithm described in Section~4.2. The setting differs from Experiment~1 in two key respects. First, polynomial coefficients are sampled from $[0, B)$ with $B = 2^{16}$, so intermediate products can exceed any single NTT-friendly prime; multiple CRT moduli are required. Second, only two algorithms are compared---General Pairwise ($3c(k-1)$ transforms) and General Delayed Inverse ($c(k+1)$ transforms)---where $c$ is the minimum number of CRT moduli needed to represent the product exactly. The theoretical speedup ratio $\frac{3(k-1)}{k+1}$ is the same as in the fixed-ring setting, but the constant factor from CRT reconstruction means the measured ratio may deviate slightly for larger $c$.
+
+The operand size is fixed at $n = 256$. Chain lengths $k \in \{2, 3, 4, 5, 8, 10, 16\}$ are tested. Polynomial coefficients are sampled uniformly from $[0, 2^{16})$. The number of CRT moduli $c$ is chosen minimally for each $k$ so that $\prod_{j=0}^{c-1} q_j \geq n^{k-1} B^k$, as required by Proposition~4.1.
+
+\subsubsection*{CRT Moduli and Roots of Unity}
+
+The six NTT-friendly primes used are listed in Table~\ref{tab:exp2_moduli}. All primes satisfy $512 \mid q_j - 1$, guaranteeing the existence of a primitive $2n = 512$-th root of unity for $n = 256$. The first modulus is the 64-bit Goldilocks prime; the remaining five are the largest 63-bit primes satisfying this divisibility condition. For each modulus $q_j$ with primitive root $g$, the value $\psi_j = g^{(q_j - 1)/512} \bmod q_j$ satisfies $\psi_j^{256} \equiv -1 \pmod{q_j}$, as verified at runtime.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{c r c r}
+\hline
+$j$ & Modulus $q_j$ & Prim.\ root $g$ & $\psi_j$ \\
+\hline
+0 & $2^{64} - 2^{32} + 1$ & 7  & 1803076106186727246 \\
+1 & 9223372036854758401   & 7  & 8120564366590232957 \\
+2 & 9223372036854747649   & 13 & 3345749197117459333 \\
+3 & 9223372036854739969   & 11 & 5916304675994044514 \\
+4 & 9223372036854739457   & 3  & 1511701938561174611 \\
+5 & 9223372036854711809   & 3  & 251082263633788300  \\
+\hline
+\end{tabular}
+\caption{CRT moduli used in Experiment~2. All satisfy $512 \mid q_j - 1$ and $\psi_j^{256} \equiv -1 \pmod{q_j}$.}
+\label{tab:exp2_moduli}
+\end{table}
+
+\subsubsection*{Transform Count Verification}
+
+For every $(k, c)$ pair tested, the instrumented counters confirmed the theoretical transform counts on every trial: General Pairwise required exactly $3c(k-1)$ transforms and General Delayed Inverse required exactly $c(k+1)$ transforms. No deviations were observed. Correctness was also verified on every trial by asserting that both algorithms produced identical coefficient vectors after CRT reconstruction via Garner's algorithm.
+
+\subsubsection*{Wall-Clock Time}
+
+Figure~\ref{fig:exp2_time} shows the mean wall-clock time for both algorithms as a function of chain length $k$. At $k = 2$, both algorithms use the same number of transforms ($3c(k-1) = c(k+1) = 3c$), so no speedup is expected; the measured times are within noise of each other. For $k \geq 3$, General Delayed Inverse is consistently faster, with the gap widening as $k$ increases. The absolute times are larger than in Experiment~1 because of the additional CRT reconstruction cost (Garner's algorithm over multiple moduli), but this overhead is common to both algorithms.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{experiment2_time.png}
+    \caption{Wall-clock time vs.\ chain length $k$ for General Pairwise and General Delayed Inverse ($n = 256$, $B = 2^{16}$).}
+    \label{fig:exp2_time}
+\end{figure}
+
+\subsubsection*{Required CRT Moduli}
+
+Figure~\ref{fig:exp2_c} shows the minimum number of CRT moduli $c$ required for each chain length. As $k$ increases, the bound $n^{k-1} B^k$ grows exponentially, requiring progressively more moduli to cover it. Each new modulus also multiplies the total transform count (both algorithms scale with $c$), so the CRT modulus count is the primary driver of the absolute running time for large $k$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{experiment2_c.png}
+    \caption{Minimum number of CRT moduli $c$ required to represent the product exactly, as a function of chain length $k$ ($n = 256$, $B = 2^{16}$).}
+    \label{fig:exp2_c}
+\end{figure}
+
+\subsubsection*{Speedup Ratio}
+
+Figure~\ref{fig:exp2_speedup} plots the measured speedup ratio alongside the theoretical prediction $\frac{3(k-1)}{k+1}$. The measured values track the theoretical curve closely. At $k = 16$ the gap is slightly wider (2.54$\times$ measured vs.\ 2.65$\times$ theoretical); this is consistent with the CRT reconstruction overhead, which is a constant cost shared by both algorithms but not captured by the transform-count ratio.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{experiment2_speedup.png}
+    \caption{Measured speedup ratio (General Pairwise / General Delayed Inverse) vs.\ $k$, compared to the theoretical transform-count ratio $\frac{3(k-1)}{k+1}$ and its asymptote $y = 3$.}
+    \label{fig:exp2_speedup}
+\end{figure}
+
+\subsubsection*{Timing Summary}
+
+Table~\ref{tab:exp2_times} lists the mean wall-clock times, CRT moduli counts, transform counts, and speedup ratios for all tested chain lengths.
+
+\input{experiment2_table.tex}
+
+
+\section{Application: Batch KZG Opening}
+
+KZG polynomial commitments~\cite{kate2010kzg} commit to a polynomial $f(x)$ as a single elliptic-curve point $[f(\tau)]_1 = f(\tau) \cdot G_1$, where $\tau$ is a secret evaluation point from a one-time trusted setup. A single opening proof at point $z$ demonstrates $f(z) = y$ by exhibiting the quotient $q(x) = (f(x)-y)/(x-z)$ as a second curve point $\pi = [q(\tau)]_1$, verified by one pairing equation.
+
+\subsection*{Batch Opening and the Zero Polynomial}
+
+In deployed ZK-rollup systems and Ethereum's data availability layer (EIP-4844~\cite{eip4844}), it is common to open $t$ polynomials $f_1,\ldots,f_t$ at $t$ distinct arbitrary evaluation points $z_1,\ldots,z_t$ in a single aggregated proof. The standard batch-opening protocol~\cite{kate2010kzg} requires computing the \emph{zero polynomial}
+$$Z(x) = \prod_{i=1}^{t}(x - z_i),$$
+a degree-$t$ polynomial whose roots are exactly the evaluation points. $Z$ is used to construct the batched quotient: since $(x-z_i)$ divides $Z(x)$ for each $i$, all $t$ openings reduce to two curve points regardless of $t$.
+
+Because the $z_i$ are arbitrary field elements chosen by the verifier (not elements of a fixed multiplicative subgroup), no closed form for $Z$ exists; it must be computed as an explicit product chain of $t$ degree-$1$ factors. In EIP-4844, $t$ reaches $4096$ per sampled blob; in the planned full Danksharding extension, $t$ rises to $8192$.
+
+\subsection*{Fixed-Size NTT Condition}
+
+The computation is performed over the scalar field $\mathbb{F}_p$ of BLS12-381, which satisfies $2^{32} \mid p - 1$ and is therefore NTT-friendly for transform sizes up to $2^{32}$. Choose any $n$ with $n > t$ and $n \mid p-1$ (e.g., the smallest power of two exceeding $t$). Zero-pad each factor $(x - z_i)$ to an $n$-coefficient vector. Because the final product $Z$ has degree $t < n$, no cyclic wraparound occurs under a size-$n$ convolution, and every multiplication produces the exact non-cyclic result. Since $n$ is fixed for the entire computation, the fixed-ring condition of the Delayed Inverse Algorithm is satisfied.
+
+\subsection*{Transform Count and Speedup}
+
+Under a balanced product tree (the standard approach), computing $Z(x)$ requires $3(t-1)$ size-$n$ NTTs. The Delayed Inverse Algorithm reduces this to $t+1$ transforms: $t$ forward NTTs (one per factor) and a single inverse NTT at the end. The speedup ratio is $3(t-1)/(t+1)$, approaching $3\times$ asymptotically. At the EIP-4844 parameters ($t = 4096$):
+$$\frac{3(t-1)}{t+1} = \frac{3\times4095}{4097} \approx 2.9985\times.$$
+At $t = 8192$ (full Danksharding): $\approx 2.9990\times$. In both cases essentially the full $3\times$ factor is realised.
+
+\subsection*{Deployment Context}
+
+EIP-4844 introduced KZG batch openings into Ethereum mainnet in March 2024. Each 12-second slot carries up to six data blobs, each committed via KZG and batch-verified using a zero polynomial over the BLS12-381 scalar field. Over 900{,}000 active validators perform this verification every slot. ZK-rollups built on Ethereum (zkSync Era, Polygon zkEVM, Scroll, Linea) additionally compute batch KZG openings in their provers during proof aggregation. The zero polynomial $Z(x)$ is computed repeatedly at chain lengths where the Delayed Inverse speedup is fully realised, making batch KZG opening one of the most impactful concrete applications of this paper's contribution.
+
+\section{Conclusion}
+
+We have presented the Delayed Inverse Algorithm, a simple but effective optimization for computing polynomial product chains over NTT-friendly rings. By deferring the inverse transform and performing all intermediate multiplications as Hadamard products in the spectral domain, the algorithm reduces the number of transforms from $3(k-1)$ to $k+1$, yielding a speedup ratio of $\frac{3(k-1)}{k+1}$ that approaches $3\times$ as the chain length grows. We further presented the Hybrid Delayed Inverse Product Tree, which achieves the same transform savings while reducing the critical path from $k+1$ to $\log_2 k + 2$ under parallel execution.
+
+Our experimental results over the Goldilocks prime confirm the theoretical transform counts exactly and demonstrate measured speedups consistent with the predicted ratio. The optimization is applicable wherever polynomial product chains are evaluated over a fixed quotient ring with an NTT-friendly modulus --- a condition satisfied in batch KZG opening~\cite{kate2010kzg,eip4844}, where the zero polynomial $Z(x) = \prod_i(x-z_i)$ is computed over the BLS12-381 scalar field at chain lengths $t \geq 4096$.
+
+The key limitation of the approach is that it does not extend to settings where intermediate products grow in degree, such as general integer or arbitrary polynomial multiplication. In such cases, the NTT size must increase at each step, and the intermediate inverse-forward cancellation no longer applies.
+
+Future work includes benchmarking in production cryptographic libraries written in lower-level languages, evaluating the parallel performance of the Hybrid variant on multi-core and GPU architectures, and investigating whether analogous transform-deferral strategies apply to other spectral methods beyond the NTT.
+
+\begin{thebibliography}{99}
+
+% --- Direct citations currently marked [?] ---
+
+\bibitem{bos2018kyber}
+J.~Bos, L.~Ducas, E.~Kiltz, T.~Lepoint, V.~Lyubashevsky, J.~M. Schanck,
+P.~Schwabe, G.~Seiler, and D.~Stehl\'e,
+``{CRYSTALS--Kyber}: A {CCA}-secure module-lattice-based {KEM},''
+in \emph{2018 IEEE European Symposium on Security and Privacy (EuroS\&P)},
+2018, pp.~353--367.
+
+\bibitem{ducas2018dilithium}
+L.~Ducas, E.~Kiltz, T.~Lepoint, V.~Lyubashevsky, P.~Schwabe, G.~Seiler,
+and D.~Stehl\'e,
+``{CRYSTALS--Dilithium}: A lattice-based digital signature scheme,''
+\emph{IACR Transactions on Cryptographic Hardware and Embedded Systems},
+vol.~2018, no.~1, pp.~238--268, 2018.
+
+
+\bibitem{eip4844}
+V.~Buterin, D.~Feist, D.~Luo, G.~Santambrogio, M.~de~Miranda, and C.~Wahrstätter,
+``{EIP-4844}: Shard blob transactions,''
+Ethereum Improvement Proposal, 2022.
+\url{https://eips.ethereum.org/EIPS/eip-4844}
+
+\bibitem{kate2010kzg}
+A.~Kate, G.~M. Zaverucha, and I.~Goldberg,
+``Constant-size commitments to polynomials and their applications,''
+in \emph{Advances in Cryptology -- ASIACRYPT 2010}, ser. LNCS, vol. 6477,
+Springer, 2010, pp.~177--194.
+
+% --- Closest prior work (Related Work) ---
+
+\bibitem{saldamli2007spectral}
+G.~Saldaml{\i} and \c{C}.~K. Ko\c{c},
+``Spectral modular exponentiation,''
+in \emph{18th IEEE Symposium on Computer Arithmetic (ARITH 2007)},
+2007, pp.~123--132.
+
+% --- Foundational NTT / FFT (cite in Section 3.1 and Experimental Setup) ---
+
+\bibitem{pollard1971fft}
+J.~M. Pollard,
+``The fast {F}ourier transform in a finite field,''
+\emph{Mathematics of Computation}, vol.~25, no.~114, pp.~365--374, 1971.
+
+\bibitem{cooley1965algorithm}
+J.~W. Cooley and J.~W. Tukey,
+``An algorithm for the machine calculation of complex {F}ourier series,''
+\emph{Mathematics of Computation}, vol.~19, no.~90, pp.~297--301, 1965.
+
+\bibitem{gentleman1966fft}
+W.~M. Gentleman and G.~Sande,
+``Fast {F}ourier transforms: For fun and profit,''
+in \emph{Proc. November 7--10, 1966, Fall Joint Computer Conference (AFIPS '66)},
+1966, pp.~563--578.
+
+\bibitem{dummit2004abstract}
+D.~S. Dummit and R.~M. Foote,
+\emph{Abstract Algebra}, 3rd~ed.
+John Wiley \& Sons, 2004.
+
+\bibitem{garner1959residue}
+H.~L. Garner,
+``The residue number system,''
+\emph{IRE Transactions on Electronic Computers},
+vol.~EC-8, no.~2, pp.~140--147, Jun.\ 1959.
+
+
+\end{thebibliography}
+\end{document}
+
