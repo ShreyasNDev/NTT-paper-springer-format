@@ -23,33 +23,31 @@
 \maketitle
 
 \begin{abstract}
-We describe an optimization for computing the product of k polynomials in a fixed quotient ring $Z_{q}[x]/(x^n+1)$ where \textbf{$q$} is NTT-friendly. Standard approaches require $3(k-1)$ Number Theoretic Transforms, but by performing all intermediate multiplications as Hadamard products in the spectral domain and deferring the inverse transform, we reduce this to $k+1$ transforms. We prove the correctness of this method via a generalized convolution theorem, analyze complexity, and present a CRT-based extension that applies the optimization to general polynomial multiplication where intermediate products grow in degree.
-\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Chinese Remainder Theorem \and Zero-Knowledge Proofs \and Batch KZG Opening}
+The Number Theoretic Transform allows for efficient multiplication algorithms, due to converting multiplication in polynomial rings into hadamard products of vectors. We describe an optimization for computing the product of k polynomials in a fixed quotient ring $Z_{q}[x]/(x^n+1)$ where \textbf{$q$} is NTT-friendly. Standard approaches require $3(k-1)$ Number Theoretic Transforms, but by performing all intermediate multiplications as Hadamard products in the spectral domain and deferring the inverse transform, we reduce this to $k+1$ transforms. We prove the correctness of this method via a generalized convolution theorem, analyze complexity, and present a CRT-based extension that applies the optimization to general polynomial multiplication where intermediate products grow in degree. We perform extensive experimental analysis of both of these methods over the goldilocks prime $2^{64}-2^{32}+1$, ensuring predicted transform counts and speedup factors are accurate. We then state on application of the  method to RSA Auditing, showing how integers can be represented as polynomials through blocking and predicting the speedup factor through transform count analysis.
+
+\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Chinese Remainder Theorem \and Repeated Multiplication \and RSA Auditing}
 \end{abstract}
 
 
 \section{Introduction}
 
-
-
 The Number Theoretic Transform (NTT)~\cite{pollard1971fft} provides efficient algorithms for polynomial multiplication over finite fields and rings, reducing the cost from $O(n^2)$ schoolbook multiplication to $O(n \log n)$. It is a core operation in lattice-based cryptography, where schemes such as Kyber~\cite{bos2018kyber} and Dilithium~\cite{ducas2018dilithium} rely on polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n + 1)$ for key generation, encryption, and signature verification.
 
 A single polynomial multiplication via the NTT requires two forward transforms, one pointwise (Hadamard) product, and one inverse transform. When a chain of $k$ polynomials must be multiplied, the standard approach applies this three-transform pattern to each of the $k - 1$ individual multiplications, resulting in $3(k-1)$ transforms in total.
 
-The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation~\cite{saldamli2007spectral}, which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. However, their method targets arbitrary RSA moduli, requiring Spectral Modular Reduction machinery to handle intermediate coefficient growth. Our setting is fundamentally simpler: over NTT-friendly rings, no intermediate reduction is needed, and the cancellation follows directly from the invertibility of the NTT.
+The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation~\cite{saldamli2007spectral}, which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. We take their method one step further by recognizing that the multiplicative chains elements can be distinct, and thus extending the method past exponentiation.
 
-We observe that this standard approach is wasteful when all polynomials reside in the same fixed-size quotient ring, as is the case in the cryptographic settings described above. Each intermediate result is transformed back to the coefficient domain via an inverse NTT, only to be immediately transformed forward again for the next multiplication. These intermediate inverse-forward pairs are redundant: since the Hadamard product of two spectral vectors is itself a valid spectral vector in the same ring, all intermediate multiplications can be performed entirely in the NTT domain, and the inverse transform can be deferred to the very end of the computation.
+We observe that this standard approach is wasteful when all polynomials reside in the same fixed-size quotient ring. Each intermediate result is transformed back to the coefficient domain via an inverse NTT, only to be immediately transformed forward again for the next multiplication. These intermediate inverse-forward pairs are redundant: since the Hadamard product of two spectral vectors is itself a valid spectral vector in the same ring, all intermediate multiplications can be performed entirely in the NTT domain, and the inverse transform can be deferred to the very end of the computation.
 
 
 Our contributions 
 \begin{itemize}
     \item We state the Generalized Convolution Theorem, proving its correctness and its use of $k+1$ transforms compared with the standard count of $3(k-1)$ transforms.
     \item We state the Fixed-Ring Delayed Inverse Algorithm, making use of the Generalized Convolution Theorem, and stating its speedup factor of $\frac{3(k-1)}{k+1}$. We consider the limitations of this method to only be applicable under a coefficient modulus.
-    \item We make use of the Chinese Remainder Theorem to apply the Fixed-Ring Delayed Inverse Algorithm to the general $$\mathbb{Z}/(x^n+1)$$ ring, dubbing this the General Delayed Inverse Algorithm. We do this by performing NTTs over a modulus so large that modular reduction is not needed. 
+    \item We make use of the Chinese Remainder Theorem to apply the Fixed-Ring Delayed Inverse Algorithm to the general $\mathbb{Z}/(x^n+1)$ ring, dubbing this the General Delayed Inverse Algorithm. We do this by performing NTTs over a modulus so large that modular reduction is not needed. 
     \item We state and prove the minimum modulus size such that the General Delayed Inverse Algorithm may work without error.
     \item We provide experimental validation over the Goldilocks prime $(q = 2^64 - 2^32 + 1)$, confirming the theoretical transform counts exactly and demonstrating measured speedups approaching 3× for large chain lengths.
-    \item We consider one of the applications of this method, that being to Batch KZG Opening. We state that the Zero Polynomial is a product of 
-
+    \item We consider one of the applications of this method, that being RSA auditing. The problem involves multiplying multiple ($\approx 64)$ large integers. By representing integers as polynomials through blocking, the General Delayed Inverse Algorithm becomes applicable.
 \end{itemize}
 
 
@@ -382,7 +380,7 @@ For every chain length tested, the instrumented counters confirmed the theoretic
 
 Figure~\ref{fig:exp1_time} shows the wall-clock time for all four algorithms as a function of chain length. Pairwise and Balanced Product Tree exhibit nearly identical performance, consistent with both requiring $3(k-1)$ transforms of the same fixed size. The Delayed Inverse and Hybrid Delayed Inverse Product Tree are consistently faster, with the gap widening as $k$ increases.
 
-The Hybrid Delayed Inverse Product Tree performs comparably to the sequential Delayed Inverse in single-threaded execution, as expected. The two algorithms perform the same number of transforms and Hadamard products; the Hybrid variant offers no serial advantage, but would exhibit a shorter critical path under parallel execution ($\log_2 k + 2$ versus $k + 1$).
+The Hybrid Delayed Inverse Product Tree performs comparably to the sequential Delayed Inverse in single-threaded execution, as expected. The two algorithms perform the same number of transforms and Hadamard products, but the Hybrid algorithm is theoretically faster under parallel implementation.
 
 \begin{figure}[htbp]
     \centering
@@ -506,7 +504,7 @@ Internet-scale RSA audits routinely process tens of millions of public keys. Hen
 
 \section{Conclusion}
 
-We have presented the Delayed Inverse Algorithm, a simple but effective optimization for computing polynomial product chains over NTT-friendly rings. By deferring the inverse transform and performing all intermediate multiplications as Hadamard products in the spectral domain, the algorithm reduces the number of transforms from $3(k-1)$ to $k+1$, yielding a speedup ratio of $\frac{3(k-1)}{k+1}$ that approaches $3\times$ as the chain length grows. We further presented the Hybrid Delayed Inverse Product Tree, which achieves the same transform savings while reducing the critical path from $k+1$ to $\log_2 k + 2$ under parallel execution.
+We have presented the Delayed Inverse Algorithm, a simple but effective optimization for computing polynomial product chains over NTT-friendly rings. By deferring the inverse transform and performing all intermediate multiplications as Hadamard products in the spectral domain, the algorithm reduces the number of transforms from $3(k-1)$ to $k+1$, yielding a speedup ratio of $\frac{3(k-1)}{k+1}$ that approaches $3\times$ as the chain length grows. We further presented the Hybrid Delayed Inverse Product Tree, which achieves the same transform savings while making use of parallel architecture.
 
 Our experimental results over the Goldilocks prime confirm the theoretical transform counts exactly and demonstrate measured speedups consistent with the predicted ratio. The optimization is applicable wherever polynomial product chains are evaluated over a fixed quotient ring with an NTT-friendly modulus --- a condition satisfied in mass RSA key auditing~\cite{heninger2012mining}, where RSA moduli are represented as polynomials with integer coefficients and multiplied in batches as part of a product-tree-based batch GCD computation.
 
