@@ -360,7 +360,7 @@ The entire computation required $k + 1 = 9$ transforms ($8$ forward NTTs and $1$
 
 \subsection{Setup}
 
-All experiments were conducted on a Intel(R) Core(TM) Ultra 7 155H processor with 16 GB of RAM, running Microsoft Windows 11 Home 10.0.26200. The algorithms were implemented in Python 3.13, using only standard libraries and NumPy for array operations. No external NTT libraries were used; all four algorithms share the same iterative Cooley-Tukey NTT and Gentleman-Sande INTT implementations.
+All experiments were conducted on a Intel(R) Core(TM) Ultra 7 155H processor with 16 GB of RAM, running Microsoft Windows 11 Home 10.0.26200. The algorithms were implemented in Python 3.13, using only standard libraries and NumPy~\cite{numpy} for array operations. No external NTT libraries were used; all four algorithms share the same iterative Cooley-Tukey NTT~\cite{cooley1965algorithm} and Gentleman-Sande INTT~\cite{gentleman1966fft} implementations.
 
 The modulus used is the NTT-friendly Goldilocks prime $q = 2^{64} - 2^{32} + 1$. All arithmetic is performed in the ring $\mathbb{Z}_q[x]/(x^n + 1)$, where $n$ varies by experiment. Polynomial coefficients are sampled uniformly at random from $[0, q)$.
 
@@ -440,11 +440,11 @@ $j$ & Modulus $q_j$ & Prim.\ root $g$ & $\psi_j$ \\
 
 \subsubsection*{Transform Count Verification}
 
-For every $(k, c)$ pair tested, the instrumented counters confirmed the theoretical transform counts on every trial: General Pairwise required exactly $3c(k-1)$ transforms and General Delayed Inverse required exactly $c(k+1)$ transforms. No deviations were observed. Correctness was also verified on every trial by asserting that both algorithms produced identical coefficient vectors after CRT reconstruction via Garner's algorithm.
+For every $(k, c)$ pair tested, the instrumented counters confirmed the theoretical transform counts on every trial: General Pairwise required exactly $3c(k-1)$ transforms and General Delayed Inverse required exactly $c(k+1)$ transforms. No deviations were observed. Correctness was also verified on every trial by asserting that both algorithms produced identical coefficient vectors after CRT reconstruction via Garner's algorithm~\cite{garner1959residue}.
 
 \subsubsection*{Wall-Clock Time}
 
-Figure~\ref{fig:exp2_time} shows the mean wall-clock time for both algorithms as a function of chain length $k$. At $k = 2$, both algorithms use the same number of transforms ($3c(k-1) = c(k+1) = 3c$), so no speedup is expected; the measured times are within noise of each other. For $k \geq 3$, General Delayed Inverse is consistently faster, with the gap widening as $k$ increases. The absolute times are larger than in Experiment~1 because of the additional CRT reconstruction cost (Garner's algorithm over multiple moduli), but this overhead is common to both algorithms.
+Figure~\ref{fig:exp2_time} shows the mean wall-clock time for both algorithms as a function of chain length $k$. At $k = 2$, both algorithms use the same number of transforms ($3c(k-1) = c(k+1) = 3c$), so no speedup is expected; the measured times are within noise of each other. For $k \geq 3$, General Delayed Inverse is consistently faster, with the gap widening as $k$ increases. The absolute times are larger than in Experiment~1 because of the additional CRT reconstruction cost (Garner's algorithm~\cite{garner1959residue} over multiple moduli), but this overhead is common to both algorithms.
 
 \begin{figure}[htbp]
     \centering
@@ -473,7 +473,7 @@ Table~\ref{tab:exp2_times} lists the mean wall-clock times, CRT moduli counts, t
 
 \section{Application: Mass RSA Key Auditing}
 
-Security audits of large TLS certificate databases check whether any two RSA public keys share a prime factor --- a condition that immediately yields a complete factorisation of both moduli~\cite{heninger2012mining}. The standard algorithm builds a \emph{product tree} over the full collection of moduli and a corresponding \emph{remainder tree} to evaluate $\gcd(N_i,\, \prod_{j \neq i} N_j)$ for each modulus $N_i$. At the core of both trees is the repeated multiplication of large integers. We show that the General Delayed Inverse Algorithm applies directly to this computation.
+Security audits of large TLS certificate databases check whether any two RSA public keys share a prime factor --- a condition that immediately yields a complete factorisation of both moduli~\cite{heninger2012mining}. The standard algorithm builds a \emph{product tree} over the full collection of moduli and a corresponding \emph{remainder tree} to evaluate $\gcd(N_i,\, \prod_{j \neq i} N_j)$ for each modulus $N_i$~\cite{bernstein2004smooth}. At the core of both trees is the repeated multiplication of large integers. We show that the General Delayed Inverse Algorithm applies directly to this computation.
 
 \subsection*{Integers as Polynomials with Integer Coefficients}
 
@@ -485,7 +485,7 @@ For RSA-2048 with $w = 64$, each modulus corresponds to a degree-$31$ polynomial
 
 Integer multiplication is then polynomial multiplication evaluated at the base:
 $$N_i \cdot N_j \;=\; N_i(x) \cdot N_j(x)\big|_{x=2^w}.$$
-This identification is the foundation of NTT-accelerated multi-precision arithmetic. Crucially, it means the product chain $N_1 \cdot N_2 \cdots N_k$ is exactly a product chain of degree-$(d{-}1)$ polynomials with bounded integer coefficients --- the setting of the General Delayed Inverse Algorithm.
+This identification is the foundation of NTT-accelerated multi-precision arithmetic~\cite{schonhage1971}. Crucially, it means the product chain $N_1 \cdot N_2 \cdots N_k$ is exactly a product chain of degree-$(d{-}1)$ polynomials with bounded integer coefficients --- the setting of the General Delayed Inverse Algorithm.
 
 \subsection*{Fixed-Ring Condition}
 
@@ -574,6 +574,21 @@ H.~L. Garner,
 \emph{IRE Transactions on Electronic Computers},
 vol.~EC-8, no.~2, pp.~140--147, Jun.\ 1959.
 
+\bibitem{numpy}
+C.~R. Harris et~al.,
+``Array programming with {NumPy},''
+\emph{Nature}, vol.~585, pp.~357--362, 2020.
+
+\bibitem{bernstein2004smooth}
+D.~J. Bernstein,
+``How to find smooth parts of integers,''
+manuscript, 2004.
+Available at \url{https://cr.yp.to/factorization/smoothparts-20040510.pdf}
+
+\bibitem{schonhage1971}
+A.~Sch{\"o}nhage and V.~Strassen,
+``Schnelle {M}ultiplikation gro{\ss}er {Z}ahlen,''
+\emph{Computing}, vol.~7, no.~3--4, pp.~281--292, 1971.
 
 \end{thebibliography}
 \end{document}
