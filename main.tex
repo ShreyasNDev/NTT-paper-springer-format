@@ -53,7 +53,7 @@ Our contributions
 \end{itemize}
 
 
-\paragraph{Organization.} Section 2 reviews the Number Theoretic Transform, the convolution theorem, and the Chinese Remainder Theorem. Section 3 presents the standard pairwise and balanced product tree algorithms for chain multiplication. Section 4 presents the Delayed Inverse Algorithm, the Generalized Convolution Theorem, the Hybrid Delayed Inverse Product Tree, and the General Delayed Inverse Algorithm. Section 5 provides experimental evaluation. Section 6 discusses an application to batch KZG opening. Section 7 concludes.
+\paragraph{Organization.} Section 2 reviews the Number Theoretic Transform, the convolution theorem, and the Chinese Remainder Theorem. Section 3 presents the standard pairwise and balanced product tree algorithms for chain multiplication. Section 4 presents the Delayed Inverse Algorithm, the Generalized Convolution Theorem, the Hybrid Delayed Inverse Product Tree, and the General Delayed Inverse Algorithm. Section 5 provides experimental evaluation. Section 6 discusses an application to mass RSA key auditing. Section 7 concludes.
 
 \section{Background}
 
@@ -473,37 +473,42 @@ Table~\ref{tab:exp2_times} lists the mean wall-clock times, CRT moduli counts, t
 \input{experiment2_table.tex}
 
 
-\section{Application: Batch KZG Opening}
+\section{Application: Mass RSA Key Auditing}
 
-KZG polynomial commitments~\cite{kate2010kzg} commit to a polynomial $f(x)$ as a single elliptic-curve point $[f(\tau)]_1 = f(\tau) \cdot G_1$, where $\tau$ is a secret evaluation point from a one-time trusted setup. A single opening proof at point $z$ demonstrates $f(z) = y$ by exhibiting the quotient $q(x) = (f(x)-y)/(x-z)$ as a second curve point $\pi = [q(\tau)]_1$, verified by one pairing equation.
+Security audits of large TLS certificate databases check whether any two RSA public keys share a prime factor --- a condition that immediately yields a complete factorisation of both moduli~\cite{heninger2012mining}. The standard algorithm builds a \emph{product tree} over the full collection of moduli and a corresponding \emph{remainder tree} to evaluate $\gcd(N_i,\, \prod_{j \neq i} N_j)$ for each modulus $N_i$. At the core of both trees is the repeated multiplication of large integers. We show that the General Delayed Inverse Algorithm applies directly to this computation.
 
-\subsection*{Batch Opening and the Zero Polynomial}
+\subsection*{Integers as Polynomials with Integer Coefficients}
 
-In deployed ZK-rollup systems and Ethereum's data availability layer (EIP-4844~\cite{eip4844}), it is common to open $t$ polynomials $f_1,\ldots,f_t$ at $t$ distinct arbitrary evaluation points $z_1,\ldots,z_t$ in a single aggregated proof. The standard batch-opening protocol~\cite{kate2010kzg} requires computing the \emph{zero polynomial}
-$$Z(x) = \prod_{i=1}^{t}(x - z_i),$$
-a degree-$t$ polynomial whose roots are exactly the evaluation points. $Z$ is used to construct the batched quotient: since $(x-z_i)$ divides $Z(x)$ for each $i$, all $t$ openings reduce to two curve points regardless of $t$.
+A $b$-bit RSA modulus $N$ can be written in a base-$2^w$ positional representation as
+$$N = \sum_{j=0}^{d-1} n_j\, 2^{wj}, \qquad n_j \in [0,\, 2^w),$$
+where $d = \lceil b/w \rceil$. Identifying $x = 2^w$, this is precisely the evaluation at $x = 2^w$ of the polynomial
+$$N(x) = \sum_{j=0}^{d-1} n_j\, x^j \;\in\; \mathbb{Z}[x].$$
+For RSA-2048 with $w = 64$, each modulus corresponds to a degree-$31$ polynomial with bounded integer coefficients $n_j \in [0,\, 2^{64})$, and $B = 2^{64}$.
 
-Because the $z_i$ are arbitrary field elements chosen by the verifier (not elements of a fixed multiplicative subgroup), no closed form for $Z$ exists; it must be computed as an explicit product chain of $t$ degree-$1$ factors. In EIP-4844, $t$ reaches $4096$ per sampled blob; in the planned full Danksharding extension, $t$ rises to $8192$.
+Integer multiplication is then polynomial multiplication evaluated at the base:
+$$N_i \cdot N_j \;=\; N_i(x) \cdot N_j(x)\big|_{x=2^w}.$$
+This identification is the foundation of NTT-accelerated multi-precision arithmetic. Crucially, it means the product chain $N_1 \cdot N_2 \cdots N_k$ is exactly a product chain of degree-$(d{-}1)$ polynomials with bounded integer coefficients --- the setting of the General Delayed Inverse Algorithm.
 
-\subsection*{Fixed-Size NTT Condition}
+\subsection*{Fixed-Ring Condition}
 
-The computation is performed over the scalar field $\mathbb{F}_p$ of BLS12-381, which satisfies $2^{32} \mid p - 1$ and is therefore NTT-friendly for transform sizes up to $2^{32}$. Choose any $n$ with $n > t$ and $n \mid p-1$ (e.g., the smallest power of two exceeding $t$). Zero-pad each factor $(x - z_i)$ to an $n$-coefficient vector. Because the final product $Z$ has degree $t < n$, no cyclic wraparound occurs under a size-$n$ convolution, and every multiplication produces the exact non-cyclic result. Since $n$ is fixed for the entire computation, the fixed-ring condition of the Delayed Inverse Algorithm is satisfied.
+Choose $n$ to be the smallest power of two exceeding $(d-1)k$. For RSA-2048 ($d = 32$) and a batch of $k = 16$ moduli, the product polynomial has degree at most $31 \times 16 = 496 < 512$, so $n = 512$ suffices. Because the product degree is strictly less than $n$, no reduction modulo $x^n + 1$ occurs: the computation in $\mathbb{Z}[x]/(x^n+1)$ recovers the exact polynomial product, and evaluating at $x = 2^{64}$ recovers the exact integer product. All $k$ multiplications share the same ring, so the fixed-ring condition is satisfied.
 
-\subsection*{Transform Count and Speedup}
+\subsection*{Transform Count and CRT Moduli}
 
-Under a balanced product tree (the standard approach), computing $Z(x)$ requires $3(t-1)$ size-$n$ NTTs. The Delayed Inverse Algorithm reduces this to $t+1$ transforms: $t$ forward NTTs (one per factor) and a single inverse NTT at the end. The speedup ratio is $3(t-1)/(t+1)$, approaching $3\times$ asymptotically. At the EIP-4844 parameters ($t = 4096$):
-$$\frac{3(t-1)}{t+1} = \frac{3\times4095}{4097} \approx 2.9985\times.$$
-At $t = 8192$ (full Danksharding): $\approx 2.9990\times$. In both cases essentially the full $3\times$ factor is realised.
+With $B = 2^{64}$, $n = 512$, and $k = 16$, the bound on product coefficients is
+$$n^{k-1} B^k = 512^{15} \cdot \left(2^{64}\right)^{16} = 2^{135} \cdot 2^{1024} = 2^{1159}.$$
+Using 63-bit NTT-friendly primes, this requires $c = \lceil 1159/63 \rceil = 19$ CRT moduli. The General Delayed Inverse then replaces the $3c(k-1) = 855$ transforms of a pairwise approach with $c(k+1) = 323$ transforms, a speedup of
+$$\frac{3(k-1)}{k+1} = \frac{45}{17} \approx 2.65\times.$$
 
 \subsection*{Deployment Context}
 
-EIP-4844 introduced KZG batch openings into Ethereum mainnet in March 2024. Each 12-second slot carries up to six data blobs, each committed via KZG and batch-verified using a zero polynomial over the BLS12-381 scalar field. Over 900{,}000 active validators perform this verification every slot. ZK-rollups built on Ethereum (zkSync Era, Polygon zkEVM, Scroll, Linea) additionally compute batch KZG openings in their provers during proof aggregation. The zero polynomial $Z(x)$ is computed repeatedly at chain lengths where the Delayed Inverse speedup is fully realised, making batch KZG opening one of the most impactful concrete applications of this paper's contribution.
+Internet-scale RSA audits routinely process tens of millions of public keys. Heninger et al.~\cite{heninger2012mining} applied batch GCD to approximately 7.1 million TLS certificates and 6.2 million SSH host keys, finding that 0.2\% of TLS hosts shared a prime factor with another host. The product tree at the core of this computation multiplies RSA moduli in a hierarchical chain; the General Delayed Inverse Algorithm reduces the NTT cost at every node of the tree where the fan-in is $k \geq 3$. At $k = 16$ per node, still practical for in-memory computation on modern hardware, the optimization delivers a $2.65\times$ reduction in transform operations across the most compute-intensive phase of the audit.
 
 \section{Conclusion}
 
 We have presented the Delayed Inverse Algorithm, a simple but effective optimization for computing polynomial product chains over NTT-friendly rings. By deferring the inverse transform and performing all intermediate multiplications as Hadamard products in the spectral domain, the algorithm reduces the number of transforms from $3(k-1)$ to $k+1$, yielding a speedup ratio of $\frac{3(k-1)}{k+1}$ that approaches $3\times$ as the chain length grows. We further presented the Hybrid Delayed Inverse Product Tree, which achieves the same transform savings while reducing the critical path from $k+1$ to $\log_2 k + 2$ under parallel execution.
 
-Our experimental results over the Goldilocks prime confirm the theoretical transform counts exactly and demonstrate measured speedups consistent with the predicted ratio. The optimization is applicable wherever polynomial product chains are evaluated over a fixed quotient ring with an NTT-friendly modulus --- a condition satisfied in batch KZG opening~\cite{kate2010kzg,eip4844}, where the zero polynomial $Z(x) = \prod_i(x-z_i)$ is computed over the BLS12-381 scalar field at chain lengths $t \geq 4096$.
+Our experimental results over the Goldilocks prime confirm the theoretical transform counts exactly and demonstrate measured speedups consistent with the predicted ratio. The optimization is applicable wherever polynomial product chains are evaluated over a fixed quotient ring with an NTT-friendly modulus --- a condition satisfied in mass RSA key auditing~\cite{heninger2012mining}, where RSA moduli are represented as polynomials with integer coefficients and multiplied in batches as part of a product-tree-based batch GCD computation.
 
 The key limitation of the approach is that it does not extend to settings where intermediate products grow in degree, such as general integer or arbitrary polynomial multiplication. In such cases, the NTT size must increase at each step, and the intermediate inverse-forward cancellation no longer applies.
 
@@ -528,17 +533,11 @@ and D.~Stehl\'e,
 vol.~2018, no.~1, pp.~238--268, 2018.
 
 
-\bibitem{eip4844}
-V.~Buterin, D.~Feist, D.~Luo, G.~Santambrogio, M.~de~Miranda, and C.~Wahrstätter,
-``{EIP-4844}: Shard blob transactions,''
-Ethereum Improvement Proposal, 2022.
-Available at \url{https://eips.ethereum.org/EIPS/eip-4844}
-
-\bibitem{kate2010kzg}
-A.~Kate, G.~M. Zaverucha, and I.~Goldberg,
-``Constant-size commitments to polynomials and their applications,''
-in \emph{Advances in Cryptology -- ASIACRYPT 2010}, ser. LNCS, vol. 6477,
-Springer, 2010, pp.~177--194.
+\bibitem{heninger2012mining}
+N.~Heninger, Z.~Durumeric, E.~Wustrow, and J.~A. Halderman,
+``Mining your {Ps} and {Qs}: Detection of widespread weak keys in network devices,''
+in \emph{Proc. 21st USENIX Security Symposium},
+USENIX Association, 2012, pp.~205--220.
 
 % --- Closest prior work (Related Work) ---
 
