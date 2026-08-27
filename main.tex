@@ -24,11 +24,13 @@
 
 \begin{abstract}
 We describe an optimization for computing the product of k polynomials in a fixed quotient ring $Z_{q}[x]/(x^n+1)$ where \textbf{$q$} is NTT-friendly. Standard approaches require $3(k-1)$ Number Theoretic Transforms, but by performing all intermediate multiplications as Hadamard products in the spectral domain and deferring the inverse transform, we reduce this to $k+1$ transforms. We prove the correctness of this method via a generalized convolution theorem, analyze complexity, and present a CRT-based extension that applies the optimization to general polynomial multiplication where intermediate products grow in degree.
-\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Lattice-Based Cryptography \and Chinese Remainder Theorem \and Spectral Domain}
+\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Chinese Remainder Theorem \and Zero-Knowledge Proofs \and Batch KZG Opening}
 \end{abstract}
 
 
 \section{Introduction}
+
+
 
 The Number Theoretic Transform (NTT)~\cite{pollard1971fft} provides efficient algorithms for polynomial multiplication over finite fields and rings, reducing the cost from $O(n^2)$ schoolbook multiplication to $O(n \log n)$. It is a core operation in lattice-based cryptography, where schemes such as Kyber~\cite{bos2018kyber} and Dilithium~\cite{ducas2018dilithium} rely on polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n + 1)$ for key generation, encryption, and signature verification.
 
