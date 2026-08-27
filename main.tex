@@ -311,7 +311,7 @@ This algorithm results in $c(k+1)$ transforms, as opposed to $3c(k-1)$ transform
 \subsection{Worked Example}
 
 \begin{example}
-We illustrate the Fixed-Ring Delayed Inverse Algorithm on a chain of $k = 8$ polynomials in $\mathbb{Z}_{3329}[x]/(x^4+1)$.  The modulus $q = 3329$ admits a primitive root $g = 3$; taking $\psi = 3^{416} \equiv 749 \pmod{3329}$ gives a primitive $2n = 8$-th root of unity satisfying $\psi^4 \equiv -1 \pmod{3329}$, and $\omega = \psi^2 = 1729$ is the corresponding primitive $n = 4$-th root of unity.
+We illustrate the Fixed-Ring Delayed Inverse Algorithm on a chain of $k = 8$ polynomials in $\mathbb{Z}_{3329}[x]/(x^4+1)$.  The modulus $q = 3329$ admits a primitive root $g = 3$. Taking $\psi = 3^{416} \equiv 749 \pmod{3329}$ gives a primitive $2n = 8$-th root of unity satisfying $\psi^4 \equiv -1 \pmod{3329}$, and $\omega = \psi^2 = 1729$ is the corresponding primitive $n = 4$-th root of unity.
 
 The eight input polynomials and their NTTs are:
 
@@ -352,7 +352,7 @@ The modulus used is the NTT-friendly Goldilocks prime $q = 2^{64} - 2^{32} + 1$.
 
 For each configuration, 100 trials were executed. The first 5 trials were discarded as warmup, and timing statistics are reported over the remaining 95. Wall-clock time was measured using Python's \texttt{time.perf\_counter}, timing only the chain multiplication call and excluding input generation. NTT and INTT calls were instrumented with global counters to verify transform counts.
 
-Correctness was verified on every trial by asserting that all four algorithms---Pairwise, Balanced Product Tree, Delayed Inverse, and Hybrid Delayed Inverse Product Tree---produce identical coefficient vectors. No mismatches were observed across all experiments.
+Correctness was verified on every trial by asserting that all four algorithms produce identical coefficient vectors. No mismatches were observed across all experiments.
 
 \subsection{Experiment 1: Varying Chain Length}
 
@@ -397,7 +397,7 @@ Table~\ref{tab:exp1_times} lists the mean wall-clock times (in milliseconds) for
 \subsection{Experiment 2: General Delayed Inverse Algorithm}
 
 
-In this experiment we evaluate the General Delayed Inverse Algorithm described in Section~4.2. The setting differs from Experiment~1 in two key respects. First, polynomial coefficients are sampled from $[0, B)$ with $B = 2^{16}$, so intermediate products can exceed any single NTT-friendly prime; multiple CRT moduli are required. Second, only two algorithms are compared---General Pairwise ($3c(k-1)$ transforms) and General Delayed Inverse ($c(k+1)$ transforms)---where $c$ is the minimum number of CRT moduli needed to represent the product exactly. The theoretical speedup ratio $\frac{3(k-1)}{k+1}$ is the same as in the fixed-ring setting, but the constant factor from CRT reconstruction means the measured ratio may deviate slightly for larger $c$.
+In this experiment we evaluate the General Delayed Inverse Algorithm described in Section~4.2. The setting differs from Experiment~1 in two key respects. First, polynomial coefficients are sampled from $[0, B)$ with $B = 2^{16}$, so intermediate products can exceed any single NTT-friendly prime; multiple CRT moduli are required. Second, only two algorithms are compared, those being General Pairwise ($3c(k-1)$ transforms) and General Delayed Inverse ($c(k+1)$ transforms), where $c$ is the number of CRT moduli needed to represent the product exactly. The theoretical speedup ratio $\frac{3(k-1)}{k+1}$ is the same as in the fixed-ring setting, but the constant factor from CRT reconstruction means the measured ratio may deviate slightly for larger $c$.
 
 The operand size is fixed at $n = 256$. Chain lengths $k \in \{2, 3, 4, 5, 8, 10, 16\}$ are tested. Polynomial coefficients are sampled uniformly from $[0, 2^{16})$. The number of CRT moduli $c$ is chosen minimally for each $k$ so that $\prod_{j=0}^{c-1} q_j \geq n^{k-1} B^k$, as required by Proposition~4.1.
 
