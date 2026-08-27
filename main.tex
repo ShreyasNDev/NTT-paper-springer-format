@@ -12,35 +12,33 @@
 \usepackage{url}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\title{Reducing Transform Count in NTT-Based Product Chains}
-\titlerunning{Reducing Transform Count in NTT Product Chains}
-\author{Shreyas Nathani \and Dr T. Appala Naidu}
-\authorrunning{Nathani and Naidu}
-\institute{University of Hyderabad, Hyderabad, India}
+\title{Reducing Transform overhead in NTT-Based Product Chains: Algorithms and Efficient Implementation}
+\titlerunning{Reducing Transform overhead in NTT-Based Product Chains: Algorithms and Efficient Implementation}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-The Number Theoretic Transform allows for efficient multiplication algorithms, due to converting multiplication in polynomial rings into hadamard products of vectors. We describe an optimization for computing the product of k polynomials in a fixed quotient ring $Z_{q}[x]/(x^n+1)$ where \textbf{$q$} is NTT-friendly. Standard approaches require $3(k-1)$ Number Theoretic Transforms, but by performing all intermediate multiplications as Hadamard products in the spectral domain and deferring the inverse transform, we reduce this to $k+1$ transforms. We prove the correctness of this method via a generalized convolution theorem, analyze complexity, and present a CRT-based extension that applies the optimization to general polynomial multiplication where intermediate products grow in degree. We perform extensive experimental analysis of both of these methods over the goldilocks prime $2^{64}-2^{32}+1$, ensuring predicted transform counts and speedup factors are accurate. We then state on application of the  method to RSA Auditing, showing how integers can be represented as polynomials through blocking and predicting the speedup factor through transform count analysis.
+The Number Theoretic Transform allows for efficient multiplication algorithms, due to converting multiplication in polynomial rings into hadamard products of vectors. We describe an optimization for computing the product of k polynomials in a fixed quotient ring $Z_{q}[x]/(x^n+1)$ where $q$ is NTT-friendly. Standard approaches require $3(k-1)$ Number Theoretic Transforms, but by performing all intermediate multiplications as Hadamard products in the spectral domain and deferring the inverse transform, we reduce this to $k+1$ transforms. We prove the correctness of this method via a generalized convolution theorem, analyze complexity, and present a CRT-based extension that applies the optimization to general polynomial multiplication where intermediate products grow in degree. We perform extensive experimental analysis of both of these methods over the goldilocks prime $2^{64}-2^{32}+1$, ensuring predicted transform counts and speedup factors are accurate. We then state on application of the  method to RSA Auditing, showing how integers can be represented as polynomials through blocking and predicting the speedup factor through transform count analysis.
 
-\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Chinese Remainder Theorem \and Repeated Multiplication \and RSA Auditing}
+\keywords{Number Theoretic Transform \and Polynomial Multiplication \and Chinese Remainder Theorem \and Repeated Multiplication \and RSA Auditing \and Lattice-Based Cryptograpy}
 \end{abstract}
 
 
 \section{Introduction}
 
-The Fast Fourier Transform (FFT), introduced by Cooley and Tukey~\cite{cooley1965algorithm} in 1965, reduces the cost of evaluating a degree-$n$ polynomial at $n$ points from $O(n^2)$ to $O(n \log n)$ operations; Gentleman and Sande~\cite{gentleman1966fft} presented an equivalent decimation-in-frequency formulation shortly after. Pollard~\cite{pollard1971fft} introduced the Number Theoretic Transform (NTT) as a finite-field analogue: by replacing complex roots of unity with primitive roots of unity modulo a prime $q$, the transform achieves the same asymptotic cost with exact integer arithmetic over $\mathbb{Z}_q$, eliminating the floating-point rounding errors of the complex FFT. Schönhage and Strassen~\cite{schonhage1971} applied NTT-based convolution to large-integer multiplication, yielding an $O(n \log n \log \log n)$ algorithm that remains the foundation of modern multi-precision arithmetic libraries.
+The Fast Fourier Transform (FFT), introduced by Cooley and Tukey~\cite{cooley1965algorithm} in 1965, reduces the cost of evaluating a degree-$n$ polynomial at $n$ points from $O(n^2)$ to $O(n \log n)$ operations. Gentleman and Sande~\cite{gentleman1966fft} presented an equivalent decimation-in-frequency formulation shortly after, most commonly used in evaluation of the inverse transform. Pollard~\cite{pollard1971fft} introduced the Number Theoretic Transform (NTT) as a finite-field analogue by replacing complex roots of unity with primitive roots of unity modulo a prime $q$. The transform achieves the same asymptotic cost with exact integer arithmetic over $\mathbb{Z}_q$, eliminating the floating-point rounding errors of the complex FFT. Schönhage and Strassen~\cite{schonhage1971} applied NTT-based convolution to large-integer multiplication, yielding an $O(n \log n \log \log n)$ algorithm that remains the foundation of modern multi-precision arithmetic libraries.
 
-The NTT has since become a core primitive across cryptography. In lattice-based cryptography --- the leading family of post-quantum constructions --- key operations reduce to polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n+1)$. The NTT makes these multiplications practical: schemes such as CRYSTALS-Kyber~\cite{bos2018kyber} and CRYSTALS-Dilithium~\cite{ducas2018dilithium}, recently standardised by NIST, achieve competitive performance for key encapsulation and digital signatures respectively. The NTT has also found application in spectral modular arithmetic over large RSA moduli~\cite{saldamli2007spectral} and, as this paper demonstrates, in accelerating polynomial product chains that arise in diverse computational contexts.
+The NTT has since become a core primitive across cryptography. In lattice-based cryptography, key operations reduce to polynomial multiplication in quotient rings of the form $\mathbb{Z}_q[x]/(x^n+1)$. The NTT makes these multiplications practical, with schemes such as CRYSTALS-Kyber~\cite{bos2018kyber} and CRYSTALS-Dilithium~\cite{ducas2018dilithium}, recently standardised by NIST, achieving competitive performance for key encapsulation and digital signatures respectively. The NTT has also found application in spectral modular arithmetic over large RSA moduli~\cite{saldamli2007spectral} and, as this paper demonstrates, in accelerating polynomial product chains that arise in diverse computational contexts.
 
-A single polynomial multiplication via the NTT requires two forward transforms, one pointwise (Hadamard) product, and one inverse transform. When a chain of $k$ polynomials must be multiplied, the standard approach applies this three-transform pattern to each of the $k - 1$ individual multiplications, resulting in $3(k-1)$ transforms in total.
-
-The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation~\cite{saldamli2007spectral}, which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. We take their method one step further by recognizing that the multiplicative chains elements can be distinct, and thus extending the method past exponentiation.
+A single polynomial multiplication via the NTT requires two forward transforms, one pointwise (Hadamard) product, and one inverse transform. When a
+chain of k polynomials must be multiplied, the standard approach applies this three-transform pattern to each of the $k - 1$ individual multiplications, resulting in
+$3(k -1)$ transforms in total.
 
 We observe that this standard approach is wasteful when all polynomials reside in the same fixed-size quotient ring. Each intermediate result is transformed back to the coefficient domain via an inverse NTT, only to be immediately transformed forward again for the next multiplication. These intermediate inverse-forward pairs are redundant: since the Hadamard product of two spectral vectors is itself a valid spectral vector in the same ring, all intermediate multiplications can be performed entirely in the NTT domain, and the inverse transform can be deferred to the very end of the computation.
 
+The closest prior work is Saldamlı and Koç's Spectral Modular Exponentiation~\cite{saldamli2007spectral}, which performs modular exponentiation entirely in the spectral domain. They note the same elimination of redundant transforms in a multiplicative chain. We take their method one step further by recognizing that the multiplicative chains elements can be distinct, and thus extending the method past exponentiation.
 
 Our contributions 
 \begin{itemize}
@@ -48,7 +46,7 @@ Our contributions
     \item We state the Fixed-Ring Delayed Inverse Algorithm, making use of the Generalized Convolution Theorem, and stating its speedup factor of $\frac{3(k-1)}{k+1}$. We consider the limitations of this method to only be applicable under a coefficient modulus.
     \item We make use of the Chinese Remainder Theorem to apply the Fixed-Ring Delayed Inverse Algorithm to the general $\mathbb{Z}/(x^n+1)$ ring, dubbing this the General Delayed Inverse Algorithm. We do this by performing NTTs over a modulus so large that modular reduction is not needed. 
     \item We state and prove the minimum modulus size such that the General Delayed Inverse Algorithm may work without error.
-    \item We provide experimental validation over the Goldilocks prime $(q = 2^64 - 2^32 + 1)$, confirming the theoretical transform counts exactly and demonstrating measured speedups approaching 3× for large chain lengths.
+    \item We provide experimental validation over the Goldilocks prime $q = 2^{64} - 2^{32} + 1$, confirming the theoretical transform counts exactly and demonstrating measured speedups approaching 3× for large chain lengths.
     \item We consider one of the applications of this method, that being RSA auditing. The problem involves multiplying multiple ($\approx 64)$ large integers. By representing integers as polynomials through blocking, the General Delayed Inverse Algorithm becomes applicable.
 \end{itemize}
 
@@ -80,19 +78,6 @@ The NTT of this vector where each element is in $\mathbb{Z} / q\mathbb{Z}$ is fo
 $$\hat{a}_j=\sum_{i=0}^{n-1}a_{i}\,\psi^{i}\omega^{ij} \pmod{q}$$
 
 Where $\psi$ is a primitive $2n$-th root of unity in $\mathbb{Z}_q$ satisfying $\psi^{2n} \equiv 1 \pmod{q}$ and $\psi^n \equiv -1 \pmod{q}$, and $\omega = \psi^2$ is the corresponding $n$-th root of unity, so that $\psi^i\omega^{ij} = \psi^{i(2j+1)}$.
-\end{definition}
-
-
-\begin{definition}
-    We say that a certain choice of modulus is NTT-possible if some nth primitive root of unity exists over the modulus choice. If
-
-    $$\omega^n\equiv1 \pmod{q}$$
-    $$\omega^k\not\equiv 1, k<n \pmod{q}$$
-
-For this to be possible the modulus must be such that, if the modulus is decomposed to its prime factors
-$$q=p_0^{m_0}\cdotp p_1^{m_1}\cdotp p_2^{m_2}...\cdotp p_{k}^{m_{k}} $$
-
-then, for the nth root of unity to exist, n must divide $GCD(p_{0}-1,p_1-1,...p_k-1)$
 \end{definition}
 
 \begin{definition}
@@ -130,7 +115,7 @@ where the INTT is the Inverse Number Theoretic Transform~\cite{gentleman1966fft}
 $$a_i=\frac{1}{n}\,\psi^{-i}\sum_{j=0}^{n-1}\hat{a}_{j}\,\omega^{-ij}$$
 \end{definition}
 
-This is the main idea \textbf{behind} Fourier transform based multiplication. As a convolution of vectors is identical to polynomial multiplication, performing Hadamard products over an NTT domain and then performing an Inverse NTT results in polynomial multiplication.
+This is the main idea behind Fourier transform based multiplication. As a convolution of vectors is identical to polynomial multiplication, performing Hadamard products over an NTT domain and then performing an Inverse NTT results in polynomial multiplication.
 
 \begin{definition}
     The Coefficient Modulus Chinese Remainder Theorem is as follows. Let $q_0, q_1, q_2 \dots q_{c-1}$ all be pairwise coprime integers and $A_0(x), A_1(x), A_2(x) \dots A_{c-1}(x)$ be polynomials. Then, for the system of equations
@@ -226,7 +211,7 @@ We recognize that we can cancel forward and inverse NTTs.
 $$INTT( \cancel{NTT}(\cancel{INTT}(NTT(a_0)\odot NTT(a_1)))\odot NTT(a_2))*\prod^{k-1}_{i=3}a_i=$$
 $$INTT(NTT(a_{0})\odot NTT(a_1) \odot NTT(a_2))*\prod_{i=3}^{k-1}=$$
 
-We recognize that this process can be repeated for all vectors. Thus, the convolution of all vectors can be found simply by \textbf{the following} generalized convolution theorem\textbf{:}
+We recognize that this process can be repeated for all vectors. Thus, the convolution of all vectors can be found simply by the following generalized convolution theorem
 
 \begin{proposition}
     
